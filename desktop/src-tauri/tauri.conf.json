@@ -1,0 +1,82 @@
+{
+	"$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/tauri-v2.0.0-rc.2/core/tauri-config-schema/schema.json",
+	"productName": "Humaan",
+	"identifier": "com.humaan.desktop",
+	"build": {
+		"beforeDevCommand": "pnpm dev",
+		"beforeBuildCommand": "pnpm build",
+		"devUrl": "http://localhost:5173",
+		"frontendDist": "../build"
+	},
+	"app": {
+		"withGlobalTauri": true,
+		"macOSPrivateApi": true,
+		"windows": [
+			{
+				"hiddenTitle": true,
+				"maximized": true,
+				"minWidth": 768,
+				"minHeight": 500,
+				"resizable": true,
+				"fullscreen": false,
+				"center": true,
+				"decorations": true,
+				"windowEffects": {
+					"effects": ["sidebar"],
+					"state": "followsWindowActiveState",
+					"radius": 9
+				}
+			}
+		],
+		"security": {
+			"csp": null
+		}
+	},
+	"bundle": {
+		"active": true,
+		"targets": ["dmg"],
+		"publisher": "Humaan Inc.",
+		"copyright": "Humaan Inc.",
+		"category": "DeveloperTool",
+		"shortDescription": "Humaan",
+		"longDescription": "Human-like intelligence platform",
+		"icon": [
+			"icons/32x32.png",
+			"icons/128x128.png",
+			"icons/128x128@2x.png",
+			"icons/icon.icns",
+			"icons/icon.ico"
+		],
+		"macOS": {
+			"minimumSystemVersion": "10.15",
+			"exceptionDomain": null,
+			"entitlements": null,
+			"frameworks": [],
+			"dmg": {
+				"background": "dmg-background.png",
+				"appPosition": {
+					"x": 190,
+					"y": 190
+				},
+				"applicationFolderPosition": {
+					"x": 470,
+					"y": 190
+				}
+			}
+		},
+		"windows": {
+			"certificateThumbprint": null,
+			"webviewInstallMode": {
+				"type": "embedBootstrapper",
+				"silent": true
+			},
+			"digestAlgorithm": "sha256",
+			"timestampUrl": "",
+			"wix": {
+				"dialogImagePath": "icons/WindowsDialogImage.bmp",
+				"bannerPath": "icons/WindowsBanner.bmp"
+			}
+		}
+	},
+	"plugins": {}
+}
