@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+/* Palette: VS Code "Dark Modern" (default dark theme) */
+@theme {
+  --color-background: #1f1f1f; /* editor.background */
+  --color-surface: #181818; /* sideBar / titleBar / statusBar */
+  --color-raised: #313131; /* input / dropdown background */
+  --color-border: #2b2b2b; /* panel borders */
+  --color-border-strong: #454545; /* menu / widget borders */
+
+  --color-foreground: #cccccc;
+  --color-muted: #9d9d9d;
+
+  --color-accent: #0078d4; /* buttons, focus ring, badges */
+  --color-accent-hover: #026ec1;
+  --color-link: #4daafc;
+
+  --color-selection: #04395e; /* list.activeSelectionBackground */
+  --color-hover: #2a2d2e; /* list.hoverBackground */
+
+  --color-error: #f85149;
+  --color-warning: #cca700;
+  --color-success: #2ea043;
+
+  --font-sans: Inter, Avenir, Helvetica, Arial, ui-sans-serif, system-ui,
+    sans-serif;
+  --font-mono: "SF Mono", Monaco, Menlo, Consolas, ui-monospace, monospace;
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  select,
+  input[type="checkbox"],
+  input[type="range"] {
+    cursor: pointer;
+  }
+}

@@ -1,0 +1,41 @@
+# Rust / Cargo
+/target/
+
+# Node / Bun
+node_modules/
+
+# SvelteKit
+**/.svelte-kit/
+**/build/
+**/package/
+vite.config.*.timestamp-*
+
+# Tauri
+**/src-tauri/target/
+**/src-tauri/gen/schemas/
+apps/desktop/src-tauri/target/release/bundle/
+
+# Environment
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Editors
+.idea/
+*.iml
+*.swp
+*.swo
+*~
+
+# Misc
+Thumbs.db
+*.log
+*.pid
