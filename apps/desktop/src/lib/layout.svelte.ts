@@ -1,4 +1,4 @@
-export type ViewId = "project" | "assembly" | "models" | "data" | "simulation" | "compute";
+export type ViewId = "project" | "assembly" | "simulation";
 export type BottomTab = "problems" | "output" | "debug" | "terminal";
 
 export const layout = $state({

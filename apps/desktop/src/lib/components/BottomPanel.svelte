@@ -36,13 +36,13 @@
     onpointermove={onResize}
     onpointerup={() => (resizing = false)}
   ></div>
-  <div class="flex h-[35px] shrink-0 items-center justify-between px-3 select-none">
-    <div class="flex h-full items-center gap-4">
+  <div class="flex h-9 shrink-0 items-center justify-between px-3 select-none">
+    <div class="flex h-full items-center gap-2">
       {#each tabs as tab}
         <button
-          class="flex h-full items-center border-b text-[11px] tracking-wide uppercase {layout.bottomTab ===
+          class="flex items-center border-b text-xs px-2 py-1 rounded-md tracking-wide font-semibold {layout.bottomTab ===
           tab.id
-            ? 'border-accent text-foreground'
+            ? 'bg-muted/10 border-transparent  text-white'
             : 'border-transparent text-muted hover:text-foreground'}"
           onclick={() => (layout.bottomTab = tab.id)}
         >
@@ -59,7 +59,7 @@
     </button>
   </div>
 
-  <div class="min-h-0 flex-1 overflow-y-auto px-4 pb-3 font-mono text-xs text-muted">
+  <div class="min-h-0 flex-1 overflow-y-auto pt-2 px-4 pb-3 font-mono text-xs text-muted">
     {#if layout.bottomTab === "problems"}
       <p>No problems have been detected in the workspace.</p>
     {:else if layout.bottomTab === "output"}

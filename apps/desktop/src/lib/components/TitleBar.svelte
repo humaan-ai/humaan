@@ -4,6 +4,17 @@
   import PanelBottom from "@lucide/svelte/icons/panel-bottom";
   import PanelRight from "@lucide/svelte/icons/panel-right";
   import Search from "@lucide/svelte/icons/search";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
+
+  const appWindow = getCurrentWindow();
+
+  function onPointerDown(e: PointerEvent) {
+    const target = e.target as HTMLElement;
+    // Only initiate dragging on left click, and not when clicking buttons or input fields
+    if (e.button === 0 && !target.closest("button") && !target.closest("input")) {
+      appWindow.startDragging();
+    }
+  }
 
   const toggles = [
     {
@@ -33,8 +44,9 @@
   ];
 </script>
 
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <header
-  data-tauri-drag-region
+  onpointerdown={onPointerDown}
   class="relative flex h-[35px] shrink-0 items-center justify-end border-b border-border bg-surface pr-2 pl-20 select-none"
 >
   <div class="pointer-events-none absolute inset-x-0 flex justify-center">

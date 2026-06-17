@@ -1,21 +1,15 @@
 <script lang="ts">
   import { layout, type ViewId } from "$lib/layout.svelte";
-  import FolderOpen from "@lucide/svelte/icons/folder-open";
-  import Server from "@lucide/svelte/icons/server";
-  import Layers from "@lucide/svelte/icons/layers";
-  import Database from "@lucide/svelte/icons/database";
+  import Files from "@lucide/svelte/icons/files";
   import Boxes from "@lucide/svelte/icons/boxes";
   import Blocks from "@lucide/svelte/icons/blocks";
   import CircleUser from "@lucide/svelte/icons/circle-user";
   import Settings from "@lucide/svelte/icons/settings";
 
-  const items: { id: ViewId; label: string; icon: typeof FolderOpen }[] = [
-    { id: "project", label: "Project", icon: FolderOpen },
+  const items: { id: ViewId; label: string; icon: typeof Files }[] = [
+    { id: "project", label: "Project", icon: Files },
     { id: "assembly", label: "Assembly", icon: Blocks },
-    { id: "models", label: "Models", icon: Layers },
-    { id: "data", label: "Data", icon: Database },
     { id: "simulation", label: "Simulation", icon: Boxes },
-    { id: "compute", label: "Compute", icon: Server },
   ];
 
   function activate(id: ViewId) {

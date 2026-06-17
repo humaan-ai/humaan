@@ -1,35 +1,62 @@
 @import "tailwindcss";
 
-/* Palette: VS Code "Dark Modern" (default dark theme) */
+/* Palette: Cursor Dark */
 @theme {
-  --color-background: #1f1f1f; /* editor.background */
-  --color-surface: #181818; /* sideBar / titleBar / statusBar */
-  --color-raised: #313131; /* input / dropdown background */
-  --color-border: #2b2b2b; /* panel borders */
-  --color-border-strong: #454545; /* menu / widget borders */
+  --color-background: #1a1a1a; /* editor.background */
+  --color-surface: #141414; /* sideBar / titleBar / statusBar */
+  --color-raised: #202020; /* input / dropdown background */
+  --color-border: #ffffff0d; /* sideBar / statusBar / panel borders */
+  --color-border-strong: #2a2a2a; /* input / dropdown / widget borders */
 
-  --color-foreground: #cccccc;
-  --color-muted: #9d9d9d;
+  --color-foreground: #ccccccdd;
+  --color-muted: #909090;
 
-  --color-accent: #0078d4; /* buttons, focus ring, badges */
-  --color-accent-hover: #026ec1;
-  --color-link: #4daafc;
+  --color-accent: #4c9df3; /* buttons, focus ring, badges, links */
+  --color-accent-hover: #66aefa;
+  --color-link: #4c9df3;
 
-  --color-selection: #04395e; /* list.activeSelectionBackground */
-  --color-hover: #2a2d2e; /* list.hoverBackground */
+  --color-selection: #343434; /* editor selection background */
+  --color-hover: #2a2a2a99; /* list hover background */
 
-  --color-error: #f85149;
-  --color-warning: #cca700;
-  --color-success: #2ea043;
+  --color-error: #bf616a; /* Nord red */
+  --color-warning: #ebcb8b; /* Nord yellow */
+  --color-success: #a3be8c; /* Nord green */
 
   --font-sans: Inter, Avenir, Helvetica, Arial, ui-sans-serif, system-ui,
     sans-serif;
   --font-mono: "SF Mono", Monaco, Menlo, Consolas, ui-monospace, monospace;
 }
 
+
 @layer base {
   :root {
     color-scheme: dark;
+  }
+
+  /* Custom scrollbar styling to match VS Code / Cursor dark mode */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #40404055;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #40404088;
+  }
+
+  ::-webkit-scrollbar-thumb:active {
+    background: #60606088;
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: transparent;
   }
 
   body {
