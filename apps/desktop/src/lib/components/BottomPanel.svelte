@@ -20,7 +20,7 @@
 </script>
 
 <section
-  class="relative flex shrink-0 flex-col border-t border-border bg-background"
+  class="transition-all duration-300 ease-in-out flex shrink-0 flex-col {layout.isImmersive3D ? 'absolute bottom-0 left-0 right-0 z-20 bg-background/45 border-t border-white/5 backdrop-blur-md shadow-2xl' : 'relative bg-background border-t border-border'}"
   style="height: {layout.bottomPanelHeight}px"
 >
   <div

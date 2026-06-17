@@ -13,7 +13,7 @@
 </script>
 
 <aside
-  class="relative flex shrink-0 flex-col border-l border-border bg-surface select-none"
+  class="transition-all duration-300 ease-in-out flex shrink-0 flex-col select-none {layout.isImmersive3D ? 'absolute right-0 top-[58px] bottom-0 z-20 bg-surface/45 border-l border-white/5 backdrop-blur-md shadow-2xl' : 'relative bg-surface border-l border-border'}"
   style="width: {layout.rightPanelWidth}px"
 >
   <div

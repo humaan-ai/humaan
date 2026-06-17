@@ -7,7 +7,8 @@ export const layout = $state({
   sidebarWidth: 240,
   rightPanelOpen: false,
   rightPanelWidth: 288,
-  bottomPanelOpen: true,
+  bottomPanelOpen: false,
   bottomPanelHeight: 192,
   bottomTab: "debug" as BottomTab,
+  isImmersive3D: false,
 });

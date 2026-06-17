@@ -51,7 +51,7 @@
       case 'bash':
         return 'shell';
       default:
-        return 'text';
+        return 'plaintext';
     }
   }
 
@@ -113,7 +113,7 @@
       langs: [
         "javascript", "typescript", "rust", "svelte", 
         "css", "html", "json", "markdown", "toml", 
-        "yaml", "python", "shell"
+        "yaml", "python", "shell", "plaintext"
       ]
     });
 

@@ -7,8 +7,20 @@
   import RightPanel from "$lib/components/RightPanel.svelte";
   import BottomPanel from "$lib/components/BottomPanel.svelte";
   import StatusBar from "$lib/components/StatusBar.svelte";
+  import { projectState } from "$lib/project.svelte";
 
   let { children } = $props();
+
+  $effect(() => {
+    const file = projectState.selectedFile;
+    if (file) {
+      const ext = file.split(".").pop()?.toLowerCase() || "";
+      const isCAD = ["gltf", "glb", "step", "obj", "urdf", "stl"].includes(ext);
+      layout.isImmersive3D = isCAD;
+    } else {
+      layout.isImmersive3D = false;
+    }
+  });
 
   function onKeydown(e: KeyboardEvent) {
     if (!(e.metaKey || e.ctrlKey)) return;
@@ -30,14 +42,14 @@
 <div class="flex h-screen flex-col overflow-hidden">
   <TitleBar />
 
-  <div class="flex min-h-0 flex-1">
+  <div class="flex min-h-0 flex-1 relative">
     <ActivityBar />
 
     {#if layout.sidebarOpen}
       <SideBar />
     {/if}
 
-    <div class="flex min-w-0 flex-1 flex-col">
+    <div class="flex min-w-0 flex-1 flex-col relative">
       <main class="min-h-0 flex-1 overflow-auto">
         {@render children()}
       </main>

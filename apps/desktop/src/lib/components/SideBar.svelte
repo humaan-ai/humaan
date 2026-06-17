@@ -102,7 +102,7 @@
 </script>
 
 <aside
-  class="relative flex shrink-0 flex-col border-r border-border bg-surface select-none"
+  class="transition-all duration-300 ease-in-out flex shrink-0 flex-col select-none {layout.isImmersive3D ? 'absolute left-12 top-[58px] bottom-0 z-20 bg-surface/45 border-r border-white/5 backdrop-blur-md shadow-2xl' : 'relative bg-surface border-r border-border'}"
   style="width: {layout.sidebarWidth}px"
 >
   <div

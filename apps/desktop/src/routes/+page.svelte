@@ -1,10 +1,18 @@
 <script lang="ts">
   import { projectState } from "$lib/project.svelte";
   import CodeEditor from "$lib/components/CodeEditor.svelte";
+  import ThreeViewport from "$lib/components/ThreeViewport.svelte";
   import X from "@lucide/svelte/icons/x";
   import Folder from "@lucide/svelte/icons/folder";
   import File from "@lucide/svelte/icons/file";
   import { invoke } from "@tauri-apps/api/core";
+
+  let is3DFile = $derived.by(() => {
+    const file = projectState.selectedFile;
+    if (!file) return false;
+    const ext = file.split('.').pop()?.toLowerCase() || '';
+    return ['gltf', 'glb', 'stl', 'urdf'].includes(ext);
+  });
 
   // Derive breadcrumb array from the active selected file path
   let breadcrumbs = $derived.by(() => {
@@ -149,7 +157,11 @@
       {/each}
     </div>
     
-    <CodeEditor />
+    {#if is3DFile}
+      <ThreeViewport />
+    {:else}
+      <CodeEditor />
+    {/if}
   </div>
 {:else}
   <div class="flex h-full flex-col items-center justify-center gap-8 select-none bg-background">
