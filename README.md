@@ -25,6 +25,16 @@ A low-risk testing environment. Test and iterate on robot behavior in simulation
 
 Sim-to-real deployment. Once a behavior works in the Sandbox, deploy it to physical hardware with confidence that the robot moves in line with what was validated in simulation.
 
+## CLI
+
+Initialize a local project in the current directory with `humaan project init <name>`.
+Each project has its own identity and experiences, without a workspace or account.
+
+The offline CLI supports importing, listing, inspecting, and exporting local
+recordings with checksum verification. Install with `cargo install --path apps/cli --locked`,
+then run `humaan --help`. See the [CLI guide](apps/cli/README.md) for a runnable
+sample and the [recording format](specs/recording-format/README.md) for input requirements.
+
 ## Status & Contributing
 
 Humaan is in active development and not yet ready for production use. Issues, feedback, and contributions are welcome as the platform takes shape.

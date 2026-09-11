@@ -1,5 +1,6 @@
 # Rust / Cargo
 /target/
+/.humaan/
 
 # Node / Bun
 node_modules/
