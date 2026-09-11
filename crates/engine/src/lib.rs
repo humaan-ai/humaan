@@ -1,5 +1,9 @@
 //! Offline operations on versioned recording directories.
+pub mod annotations;
+mod lerobot;
 pub mod project;
+#[cfg(feature = "rerun")]
+pub mod replay;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -146,6 +150,21 @@ fn copy_recording(source: &Path, destination: &Path) -> Result<Manifest> {
         regular_file(source, "manifest.json")?,
         staging.path().join("manifest.json"),
     )?;
+    // Reviews are mutable metadata; preserve their complete validated history.
+    if !manifest.artifacts.iter().any(|a| {
+        a.path
+            .split('/')
+            .next()
+            .is_some_and(|p| p.eq_ignore_ascii_case(annotations::FILE))
+    }) {
+        let reviews = annotations::read(source, &manifest.id)?;
+        if !reviews.revisions.is_empty() {
+            fs::write(
+                staging.path().join(annotations::FILE),
+                serde_json::to_vec_pretty(&reviews)?,
+            )?;
+        }
+    }
     let copied = inspect(staging.path())?;
     if copied.id != manifest.id {
         return Err(invalid("source manifest changed during copy"));
@@ -164,6 +183,41 @@ pub fn import(store: &Path, source: &Path) -> Result<Manifest> {
     copy_recording(source, &store.join(&manifest.id))
 }
 
+/// Detect a native recording or a complete LeRobot v3.0 dataset.
+pub fn import_recordings(store: &Path, source: &Path) -> Result<Vec<Manifest>> {
+    if !source.is_dir() {
+        return Err(invalid(format!(
+            "import source is not a directory: {}",
+            source.display()
+        )));
+    }
+    if source.join("manifest.json").try_exists()? {
+        return Ok(vec![import(store, source)?]);
+    }
+    if source.join("meta/info.json").try_exists()? {
+        return lerobot::import(store, source);
+    }
+    Err(invalid(
+        "unrecognized recording format: expected manifest.json (Humaan v1) or meta/info.json (LeRobot v3.0)",
+    ))
+}
+
+/// Read adapter provenance only after validating the recording's artifacts.
+pub fn lerobot_details(store: &Path, manifest: &Manifest) -> Result<Option<serde_json::Value>> {
+    if let Some(artifact) = manifest
+        .artifacts
+        .iter()
+        .find(|a| a.format == "application/vnd.humaan.lerobot-experience+json")
+    {
+        validate_id(&manifest.id)?;
+        return Ok(Some(serde_json::from_slice(&fs::read(regular_file(
+            &store.join(&manifest.id),
+            &artifact.path,
+        )?)?)?));
+    }
+    Ok(None)
+}
+
 pub fn inspect_experience(store: &Path, id: &str) -> Result<Manifest> {
     validate_id(id)?;
     let manifest = inspect(&store.join(id))?;
@@ -180,6 +234,15 @@ pub fn export(store: &Path, id: &str, destination: &Path) -> Result<Manifest> {
 
 /// The initial catalog is the collection of recording manifests on disk.
 pub fn list(store: &Path) -> Result<Vec<Manifest>> {
+    list_entries(store, true)
+}
+
+/// Read catalog metadata without opening artifacts. This does not establish integrity.
+pub fn list_metadata(store: &Path) -> Result<Vec<Manifest>> {
+    list_entries(store, false)
+}
+
+fn list_entries(store: &Path, verify_artifacts: bool) -> Result<Vec<Manifest>> {
     let entries = match fs::read_dir(store) {
         Ok(entries) => entries,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
@@ -198,7 +261,24 @@ pub fn list(store: &Path) -> Result<Vec<Manifest>> {
         if !entry.file_type()?.is_dir() {
             return Err(invalid("unexpected entry in recording store"));
         }
-        experiences.push(inspect_experience(store, id)?);
+        if verify_artifacts {
+            experiences.push(inspect_experience(store, id)?);
+        } else {
+            validate_id(id)?;
+            let manifest: Manifest = serde_json::from_slice(&fs::read(regular_file(
+                &store.join(id),
+                "manifest.json",
+            )?)?)?;
+            if manifest.version != 1
+                || manifest.id != id
+                || manifest.robot.trim().is_empty()
+                || manifest.task.trim().is_empty()
+                || manifest.artifacts.is_empty()
+            {
+                return Err(invalid(format!("invalid catalog metadata for {id}")));
+            }
+            experiences.push(manifest);
+        }
     }
     experiences.sort_by(|a, b| a.id.cmp(&b.id));
     Ok(experiences)

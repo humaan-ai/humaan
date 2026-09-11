@@ -14,6 +14,7 @@
   type Section = { label: string; items: Item[] };
 
   const views: Record<ViewId, { title: string; sections: Section[] }> = {
+    experiences: { title: "Experiences", sections: [] },
     project: {
       title: "Project",
       sections: [

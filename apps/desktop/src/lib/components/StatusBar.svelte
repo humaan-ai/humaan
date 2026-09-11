@@ -9,6 +9,10 @@
 <footer
   class="flex h-[22px] shrink-0 items-center justify-between border-t border-border bg-surface text-[11px] text-foreground/80 select-none"
 >
+  {#if layout.activeView === "experiences"}
+    <span class="px-3">Local recordings</span>
+    <span class="px-3 text-muted">No cloud connection required</span>
+  {:else}
   <div class="flex h-full items-center">
     <div
       class="flex h-full items-center gap-1 px-2 hover:bg-hover"
@@ -39,4 +43,5 @@
       <Bell size={12} strokeWidth={1.8} />
     </span>
   </div>
+  {/if}
 </footer>

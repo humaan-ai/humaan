@@ -50,6 +50,9 @@
   class="relative flex h-[35px] shrink-0 items-center justify-end border-b border-border bg-surface pr-2 pl-20 select-none"
 >
   <div class="pointer-events-none absolute inset-x-0 flex justify-center">
+    {#if layout.activeView === "experiences"}
+      <span class="text-xs text-muted">Humaan · Experiences</span>
+    {:else}
     <div
       class="pointer-events-auto flex h-6 w-2/5 max-w-md items-center gap-1.5 rounded-md border border-border-strong bg-raised/60 px-2 text-xs text-muted focus-within:border-accent"
     >
@@ -60,8 +63,10 @@
         class="w-full bg-transparent placeholder:text-muted/70 focus:outline-none"
       />
     </div>
+    {/if}
   </div>
 
+  {#if layout.activeView !== "experiences"}
   {#each toggles as t}
     <button
       class="flex h-[26px] w-[30px] items-center justify-center rounded-sm hover:bg-hover {t.active
@@ -73,4 +78,5 @@
       <t.icon size={16} strokeWidth={1.6} />
     </button>
   {/each}
+  {/if}
 </header>

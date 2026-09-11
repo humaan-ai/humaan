@@ -8,12 +8,13 @@
   import BottomPanel from "$lib/components/BottomPanel.svelte";
   import StatusBar from "$lib/components/StatusBar.svelte";
   import { projectState } from "$lib/project.svelte";
+  import Experiences from "$lib/components/Experiences.svelte";
 
   let { children } = $props();
 
   $effect(() => {
     const file = projectState.selectedFile;
-    if (file) {
+    if (file && layout.activeView !== "experiences") {
       const ext = file.split(".").pop()?.toLowerCase() || "";
       const isCAD = ["gltf", "glb", "step", "obj", "urdf", "stl"].includes(ext);
       layout.isImmersive3D = isCAD;
@@ -45,21 +46,26 @@
   <div class="flex min-h-0 flex-1 relative">
     <ActivityBar />
 
-    {#if layout.sidebarOpen}
+    {#if layout.sidebarOpen && layout.activeView !== "experiences"}
       <SideBar />
     {/if}
 
     <div class="flex min-w-0 flex-1 flex-col relative">
       <main class="min-h-0 flex-1 overflow-auto">
-        {@render children()}
+        <div class="h-full" hidden={layout.activeView !== "experiences"}>
+          <Experiences />
+        </div>
+        {#if layout.activeView !== "experiences"}
+          {@render children()}
+        {/if}
       </main>
 
-      {#if layout.bottomPanelOpen}
+      {#if layout.bottomPanelOpen && layout.activeView !== "experiences"}
         <BottomPanel />
       {/if}
     </div>
 
-    {#if layout.rightPanelOpen}
+    {#if layout.rightPanelOpen && layout.activeView !== "experiences"}
       <RightPanel />
     {/if}
   </div>

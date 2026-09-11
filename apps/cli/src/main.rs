@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 use humaan_engine as engine;
 use std::path::PathBuf;
+mod progress;
 
 #[derive(Parser)]
 #[command(
@@ -26,12 +27,16 @@ enum Command {
         #[command(subcommand)]
         command: ProjectCommand,
     },
-    /// Import a recording directory containing manifest.json
+    /// Import a Humaan recording or auto-detect a LeRobot v3.0 dataset
+    // TODO: Add an explicit `--format` override if more adapters make detection ambiguous.
     Import { source: PathBuf },
     /// List local experiences and verify their artifacts
     List,
     /// Inspect and verify a local experience
-    Inspect { id: String },
+    Inspect {
+        /// Experience ID printed by `humaan import` or `humaan list` (not the project ID)
+        id: String,
+    },
     /// Check all local experiences and report every damaged entry
     Verify,
     /// Export original files to a new directory
@@ -81,7 +86,9 @@ fn run(cli: Cli) -> engine::Result<std::process::ExitCode> {
             .unwrap_or_else(|| engine::project::store(&current))
     };
     if matches!(&cli.command, Command::Verify) {
+        let progress = progress::Progress::start("Verifying recordings", cli.json);
         let results = engine::verify(&store()?)?;
+        drop(progress);
         let valid = results.iter().all(|result| result.valid);
         if cli.json {
             println!("{}", serde_json::to_string_pretty(&results)?);
@@ -105,9 +112,28 @@ fn run(cli: Cli) -> engine::Result<std::process::ExitCode> {
         });
     }
     let detailed = matches!(&cli.command, Command::Inspect { .. });
+    let progress = match &cli.command {
+        Command::Import { .. } => Some(progress::Progress::start(
+            "Importing and verifying recordings",
+            cli.json,
+        )),
+        Command::List => Some(progress::Progress::start(
+            "Listing and verifying recordings",
+            cli.json,
+        )),
+        Command::Inspect { .. } => Some(progress::Progress::start(
+            "Inspecting and verifying recording",
+            cli.json,
+        )),
+        Command::Export { .. } => Some(progress::Progress::start(
+            "Exporting and verifying recording",
+            cli.json,
+        )),
+        _ => None,
+    };
     let (verb, experiences) = match cli.command {
         Command::Project { .. } | Command::Verify => unreachable!(),
-        Command::Import { source } => ("Imported", vec![engine::import(&store()?, &source)?]),
+        Command::Import { source } => ("Imported", engine::import_recordings(&store()?, &source)?),
         Command::List => ("", engine::list(&store()?)?),
         Command::Inspect { id } => (
             "Verified",
@@ -130,12 +156,21 @@ fn run(cli: Cli) -> engine::Result<std::process::ExitCode> {
             return Ok(std::process::ExitCode::FAILURE);
         }
     };
+    drop(progress);
     if cli.json {
-        println!("{}", serde_json::to_string_pretty(&experiences)?);
+        let mut output = serde_json::to_value(&experiences)?;
+        if detailed {
+            for (entry, experience) in output.as_array_mut().unwrap().iter_mut().zip(&experiences) {
+                if let Some(details) = engine::lerobot_details(&store()?, experience)? {
+                    entry["source"] = details;
+                }
+            }
+        }
+        println!("{}", serde_json::to_string_pretty(&output)?);
     } else if experiences.is_empty() {
         println!("No local experiences. Import one with `humaan import <source>`.");
     } else {
-        for experience in experiences {
+        for experience in &experiences {
             println!(
                 "{}{}  robot={}  task={}  artifacts={}",
                 if verb.is_empty() {
@@ -149,6 +184,25 @@ fn run(cli: Cli) -> engine::Result<std::process::ExitCode> {
                 experience.artifacts.len()
             );
             if detailed {
+                if let Some(details) = engine::lerobot_details(&store()?, experience)? {
+                    println!(
+                        "  source=lerobot {}  episode={}  frames={}  fps={}  duration_s={}",
+                        details["version"].as_str().unwrap_or("unknown"),
+                        details["episode_index"],
+                        details["frames"],
+                        details["fps"],
+                        details["duration_s"]
+                    );
+                    println!("  outcome=unknown  policy=unknown");
+                    if let Some(videos) = details["videos"].as_object() {
+                        for (camera, video) in videos {
+                            println!(
+                                "  camera={camera}  from={}s  to={}s",
+                                video["from_timestamp"], video["to_timestamp"]
+                            );
+                        }
+                    }
+                }
                 for artifact in &experience.artifacts {
                     println!(
                         "  {}  format={}  bytes={}\n    sha256={}",
@@ -156,6 +210,14 @@ fn run(cli: Cli) -> engine::Result<std::process::ExitCode> {
                     );
                 }
             }
+        }
+        if verb == "Imported" {
+            println!(
+                "Successfully imported {} experience{} into {}.",
+                experiences.len(),
+                if experiences.len() == 1 { "" } else { "s" },
+                store()?.display()
+            );
         }
     }
     Ok(std::process::ExitCode::SUCCESS)

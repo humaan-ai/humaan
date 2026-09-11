@@ -29,6 +29,10 @@ fn offline_round_trip_and_duplicate_protection() {
         String::from_utf8_lossy(&imported.stderr)
     );
     let json: serde_json::Value = serde_json::from_slice(&imported.stdout).unwrap();
+    assert!(
+        imported.stderr.is_empty(),
+        "JSON import must not emit progress output"
+    );
     assert_eq!(json[0]["id"], "example-001");
     assert!(
         !cli(&store, &["import", fixture().to_str().unwrap()])

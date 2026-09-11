@@ -7,12 +7,17 @@
   import Settings from "@lucide/svelte/icons/settings";
 
   const items: { id: ViewId; label: string; icon: typeof Files }[] = [
+    { id: "experiences", label: "Experiences", icon: Boxes },
     { id: "project", label: "Project", icon: Files },
     { id: "assembly", label: "Assembly", icon: Blocks },
     { id: "simulation", label: "Simulation", icon: Boxes },
   ];
 
   function activate(id: ViewId) {
+    if (id === "experiences") {
+      layout.activeView = id;
+      return;
+    }
     if (layout.activeView === id && layout.sidebarOpen) {
       layout.sidebarOpen = false;
     } else {
@@ -24,7 +29,7 @@
 
 <nav class="flex w-12 shrink-0 flex-col items-center border-r border-border bg-surface select-none">
   {#each items as item}
-    {@const active = layout.activeView === item.id && layout.sidebarOpen}
+    {@const active = layout.activeView === item.id && (item.id === "experiences" || layout.sidebarOpen)}
     <button
       class="relative flex h-12 w-12 items-center justify-center border-l-2 {active
         ? 'border-accent text-foreground'
