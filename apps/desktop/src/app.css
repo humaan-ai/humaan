@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+/* Cursor Dark surfaces and text hierarchy. */
+@theme {
+  --color-background: #1a1a1a; /* editor.background */
+  --color-surface: #141414; /* sideBar / titleBar / statusBar */
+  --color-raised: #202020; /* input / dropdown background */
+  --color-border: #ffffff0d; /* sideBar / statusBar / panel borders */
+  --color-border-strong: #2a2a2a; /* input / dropdown / widget borders */
+
+  --color-title: #f0f0f0;
+  --color-foreground: #f0f0f0bd;
+  --color-muted: #f0f0f0bd;
+
+  --color-accent: #4c9df3; /* buttons, focus ring, badges, links */
+  --color-accent-hover: #66aefa;
+  --color-link: #4c9df3;
+
+  --color-selection: #343434; /* editor selection background */
+  --color-hover: #2a2a2a99; /* list hover background */
+
+  --color-error: #bf616a; /* Nord red */
+  --color-warning: #ebcb8b; /* Nord yellow */
+  --color-success: #a3be8c; /* Nord green */
+
+  --font-sans: Inter, Avenir, Helvetica, Arial, ui-sans-serif, system-ui,
+    sans-serif;
+  --font-mono: "SF Mono", Monaco, Menlo, Consolas, ui-monospace, monospace;
+}
+
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  /* Custom scrollbar styling to match VS Code / Cursor dark mode */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #40404055;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #40404088;
+  }
+
+  ::-webkit-scrollbar-thumb:active {
+    background: #60606088;
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply text-title;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  select,
+  input[type="checkbox"],
+  input[type="range"] {
+    cursor: pointer;
+  }
+}

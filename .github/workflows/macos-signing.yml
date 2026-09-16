@@ -1,0 +1,138 @@
+name: Studio macOS signing
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'studio-v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: studio-macos-signing-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  studio:
+    name: Sign and notarize Studio (Apple Silicon)
+    runs-on: macos-26
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+
+      - name: Prepare Rust and check Xcode
+        run: |
+          rustup toolchain install 1.96.0 --profile minimal
+          rustup override set 1.96.0
+          test "$(uname -m)" = arm64
+          xcodebuild -version
+          xcrun actool --version --output-format=human-readable-text
+
+      - name: Check version
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          bun -e '
+            const config = await Bun.file("apps/desktop/src-tauri/tauri.conf.json").json();
+            if (!/^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/.test(config.version)) {
+              throw new Error("Unsupported release version");
+            }
+            if (process.env.REF_TYPE === "tag" && process.env.REF_NAME !== `studio-v${config.version}`) {
+              throw new Error("Tag must be studio-v followed by the Studio version in tauri.conf.json");
+            }
+          '
+
+      - name: Install frontend dependencies
+        working-directory: apps/desktop
+        run: bun install --frozen-lockfile
+
+      - name: Check frontend
+        working-directory: apps/desktop
+        run: |
+          bun run check
+          bun test
+
+      - name: Test desktop backend
+        run: cargo test -p desktop --lib --locked
+
+      - name: Import signing certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          : "${APPLE_CERTIFICATE:?Missing APPLE_CERTIFICATE}"
+          : "${APPLE_CERTIFICATE_PASSWORD:?Missing APPLE_CERTIFICATE_PASSWORD}"
+          : "${APPLE_SIGNING_IDENTITY:?Missing APPLE_SIGNING_IDENTITY}"
+          [[ "$APPLE_SIGNING_IDENTITY" == 'Developer ID Application: '* ]]
+          certificate_path="$RUNNER_TEMP/humaan-signing.p12"
+          keychain_path="$RUNNER_TEMP/humaan-signing.keychain-db"
+          keychain_password="$(openssl rand -hex 32)"
+          echo "::add-mask::$keychain_password"
+          umask 077
+          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$certificate_path"
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 7200 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$certificate_path" -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -k "$keychain_path" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -k "$keychain_password" "$keychain_path"
+          security list-keychains -d user -s "$keychain_path"
+          security find-identity -v -p codesigning "$keychain_path" | \
+            grep -F -- "$APPLE_SIGNING_IDENTITY"
+          rm -f "$certificate_path"
+
+      - name: Build, sign, notarize, and staple
+        working-directory: apps/desktop
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          : "${APPLE_ID:?Missing APPLE_ID}"
+          : "${APPLE_PASSWORD:?Missing APPLE_PASSWORD}"
+          : "${APPLE_TEAM_ID:?Missing APPLE_TEAM_ID}"
+          bun run tauri build --bundles app --ci -- --locked
+
+      - name: Verify and archive the notarized app
+        run: |
+          app_path="$GITHUB_WORKSPACE/target/release/bundle/macos/Humaan.app"
+          test -f "$app_path/Contents/Resources/Assets.car"
+          codesign --verify --deep --strict --verbose=2 "$app_path"
+          xcrun stapler validate "$app_path"
+          spctl --assess --type execute --verbose=4 "$app_path"
+          version="$(bun -p 'require("./apps/desktop/src-tauri/tauri.conf.json").version')"
+          mkdir -p dist
+          ditto -c -k --keepParent "$app_path" "dist/Humaan_${version}_aarch64.app.zip"
+          cd dist
+          shasum -a 256 ./*.zip > SHA256SUMS
+
+      - name: Upload verified download
+        uses: actions/upload-artifact@v4
+        with:
+          name: humaan-studio-macos-aarch64-${{ github.run_id }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Remove signing material
+        if: always()
+        run: |
+          keychain_path="$RUNNER_TEMP/humaan-signing.keychain-db"
+          if [[ -f "$keychain_path" ]]; then
+            security delete-keychain "$keychain_path"
+          fi
+          rm -f "$RUNNER_TEMP/humaan-signing.p12"
