@@ -1,9 +1,13 @@
 //! Offline operations on versioned recording directories.
 pub mod annotations;
+pub mod dataset_environment;
+pub mod dataset_preparation;
+pub mod learning_sets;
 mod lerobot;
 pub mod project;
 #[cfg(feature = "rerun")]
 pub mod replay;
+pub mod verification_cache;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -120,7 +124,7 @@ pub fn inspect(directory: &Path) -> Result<Manifest> {
             digest.update(&buffer[..count]);
             bytes += count as u64;
         }
-        if bytes != artifact.bytes || format!("{:x}", digest.finalize()) != artifact.sha256 {
+        if bytes != artifact.bytes || hex::encode(digest.finalize()) != artifact.sha256 {
             return Err(invalid(format!(
                 "integrity check failed for {}",
                 artifact.path
@@ -202,7 +206,8 @@ pub fn import_recordings(store: &Path, source: &Path) -> Result<Vec<Manifest>> {
     ))
 }
 
-/// Read adapter provenance only after validating the recording's artifacts.
+/// Read adapter provenance without establishing integrity. Callers consuming data
+/// must first validate artifacts; metadata-only views may display it as unverified.
 pub fn lerobot_details(store: &Path, manifest: &Manifest) -> Result<Option<serde_json::Value>> {
     if let Some(artifact) = manifest
         .artifacts
@@ -242,6 +247,22 @@ pub fn list_metadata(store: &Path) -> Result<Vec<Manifest>> {
     list_entries(store, false)
 }
 
+/// Read one experience manifest without opening or verifying recording artifacts.
+pub fn experience_metadata(store: &Path, id: &str) -> Result<Manifest> {
+    validate_id(id)?;
+    let manifest: Manifest =
+        serde_json::from_slice(&fs::read(regular_file(&store.join(id), "manifest.json")?)?)?;
+    if manifest.version != 1
+        || manifest.id != id
+        || manifest.robot.trim().is_empty()
+        || manifest.task.trim().is_empty()
+        || manifest.artifacts.is_empty()
+    {
+        return Err(invalid(format!("invalid catalog metadata for {id}")));
+    }
+    Ok(manifest)
+}
+
 fn list_entries(store: &Path, verify_artifacts: bool) -> Result<Vec<Manifest>> {
     let entries = match fs::read_dir(store) {
         Ok(entries) => entries,
@@ -264,20 +285,7 @@ fn list_entries(store: &Path, verify_artifacts: bool) -> Result<Vec<Manifest>> {
         if verify_artifacts {
             experiences.push(inspect_experience(store, id)?);
         } else {
-            validate_id(id)?;
-            let manifest: Manifest = serde_json::from_slice(&fs::read(regular_file(
-                &store.join(id),
-                "manifest.json",
-            )?)?)?;
-            if manifest.version != 1
-                || manifest.id != id
-                || manifest.robot.trim().is_empty()
-                || manifest.task.trim().is_empty()
-                || manifest.artifacts.is_empty()
-            {
-                return Err(invalid(format!("invalid catalog metadata for {id}")));
-            }
-            experiences.push(manifest);
+            experiences.push(experience_metadata(store, id)?);
         }
     }
     experiences.sort_by(|a, b| a.id.cmp(&b.id));

@@ -1,6 +1,7 @@
 use humaan_engine as engine;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
+use tauri::Manager;
 
 #[derive(Serialize)]
 pub struct LocalProject {
@@ -29,7 +30,23 @@ pub async fn experience_project(
     name: Option<String>,
 ) -> Result<LocalProject, String> {
     blocking(move || {
-        let root = Path::new(&path).canonicalize().map_err(|e| e.to_string())?;
+        let path = path.trim();
+        if path.is_empty() { return Err("Enter a project location.".into()); }
+        let location = if path == "~" || path.starts_with("~/") || path.starts_with("~\\") {
+            let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
+                .ok_or("Could not find your home folder. Enter an absolute project location.")?;
+            PathBuf::from(home).join(if path == "~" { "" } else { &path[2..] })
+        } else {
+            PathBuf::from(path)
+        };
+        if !location.is_absolute() { return Err("Enter an absolute project location or a path starting with ~/ .".into()); }
+        if let Some(ref name) = name {
+            if name.trim().is_empty() || name.chars().any(char::is_control) {
+                return Err("Enter a project name without control characters.".into());
+            }
+            std::fs::create_dir_all(&location).map_err(|e| format!("Could not create project folder: {e}"))?;
+        }
+        let root = location.canonicalize().map_err(|e| e.to_string())?;
         if !root.is_dir() { return Err("Select a project directory.".into()); }
         if let Some(name) = name {
             let project = engine::project::init(&root, &name).map_err(|e| e.to_string())?;
@@ -42,9 +59,82 @@ pub async fn experience_project(
     }).await
 }
 
+#[derive(Serialize)]
+pub struct RecordSummary {
+    #[serde(flatten)]
+    manifest: engine::Manifest,
+    duration_s: Option<f64>,
+    verification: Option<engine::verification_cache::Report>,
+    source_error: Option<String>,
+}
+
+fn record_summary(store: &Path, manifest: engine::Manifest) -> RecordSummary {
+    // Read only the small source metadata file, never media, hashes, or a replay.
+    let (duration_s, source_error) = match engine::lerobot_details(store, &manifest) {
+        Ok(source) => (
+            source
+                .and_then(|source| source["duration_s"].as_f64())
+                .filter(|seconds| seconds.is_finite() && *seconds >= 0.0),
+            None,
+        ),
+        Err(error) => (None, Some(error.to_string())),
+    };
+    RecordSummary {
+        manifest,
+        duration_s,
+        verification: None,
+        source_error,
+    }
+}
+
+#[derive(Serialize)]
+pub struct Catalog {
+    records: Vec<RecordSummary>,
+    warning: Option<String>,
+}
+
 #[tauri::command]
-pub async fn experience_list(root: String) -> Result<Vec<engine::Manifest>, String> {
-    blocking(move || engine::list_metadata(&project_store(&root)?).map_err(|e| e.to_string())).await
+pub async fn experience_list(root: String) -> Result<Catalog, String> {
+    blocking(move || {
+        let store = project_store(&root)?;
+        let (history, warning) = match engine::verification_cache::read(&store) {
+            Ok(history) => (history, None),
+            Err(error) => (Default::default(), Some(format!(
+                "Saved verification history could not be read: {error}. Records are shown as not checked. Run Verify all to rebuild the history."
+            ))),
+        };
+        let mut records = Vec::new();
+        if !store.exists() {
+            return Ok(Catalog { records, warning });
+        }
+        for entry in std::fs::read_dir(&store).map_err(|e| e.to_string())? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let id = entry.file_name().to_string_lossy().into_owned();
+            if id.starts_with('.') {
+                continue;
+            }
+            let mut summary = match engine::experience_metadata(&store, &id) {
+                Ok(manifest) => record_summary(&store, manifest),
+                Err(error) => RecordSummary {
+                    manifest: engine::Manifest {
+                        version: 1,
+                        id: id.clone(),
+                        task: "Unreadable recording".into(),
+                        robot: "Unknown".into(),
+                        artifacts: vec![],
+                    },
+                    duration_s: None,
+                    verification: None,
+                    source_error: Some(error.to_string()),
+                },
+            };
+            summary.verification = history.get(&id).cloned();
+            records.push(summary);
+        }
+        records.sort_by(|a, b| a.manifest.id.cmp(&b.manifest.id));
+        Ok(Catalog { records, warning })
+    })
+    .await
 }
 
 #[tauri::command]
@@ -63,22 +153,40 @@ pub async fn experience_import(
 pub struct Inspection {
     manifest: engine::Manifest,
     source: Option<serde_json::Value>,
+    source_error: Option<String>,
+    annotations: engine::annotations::Annotations,
 }
 
 #[tauri::command]
 pub async fn experience_inspect(root: String, id: String) -> Result<Inspection, String> {
     blocking(move || {
         let store = project_store(&root)?;
-        let manifest = engine::inspect_experience(&store, &id).map_err(|e| e.to_string())?;
-        let source = engine::lerobot_details(&store, &manifest).map_err(|e| e.to_string())?;
-        Ok(Inspection { manifest, source })
+        let manifest = engine::experience_metadata(&store, &id).map_err(|e| e.to_string())?;
+        let (source, source_error) = match engine::lerobot_details(&store, &manifest) {
+            Ok(source) => (source, None),
+            Err(error) => (None, Some(error.to_string())),
+        };
+        let annotations =
+            engine::annotations::read(&store.join(&id), &id).map_err(|e| e.to_string())?;
+        Ok(Inspection {
+            manifest,
+            source,
+            source_error,
+            annotations,
+        })
     })
     .await
 }
 
 #[tauri::command]
-pub async fn experience_verify(root: String) -> Result<Vec<engine::Verification>, String> {
-    blocking(move || engine::verify(&project_store(&root)?).map_err(|e| e.to_string())).await
+pub async fn experience_verify(
+    root: String,
+) -> Result<Vec<engine::verification_cache::Report>, String> {
+    blocking(move || {
+        engine::verification_cache::verify_and_save(&project_store(&root)?)
+            .map_err(|e| e.to_string())
+    })
+    .await
 }
 
 #[tauri::command]
@@ -94,8 +202,81 @@ pub async fn experience_export(root: String, id: String, parent: String) -> Resu
 }
 
 #[cfg(test)]
+#[path = "../../../../tests/support/recording.rs"]
+mod test_support;
+
+#[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn record_summary_reads_duration_without_verifying_artifacts() {
+        let temp = tempfile::tempdir().unwrap();
+        let recording = temp.path().join("record-1");
+        std::fs::create_dir(&recording).unwrap();
+        let manifest = || engine::Manifest {
+            version: 1,
+            id: "record-1".into(),
+            robot: "test".into(),
+            task: "pick".into(),
+            artifacts: vec![engine::Artifact {
+                path: "source.json".into(),
+                format: "application/vnd.humaan.lerobot-experience+json".into(),
+                bytes: 0,
+                sha256: "deliberately-not-verified".into(),
+            }],
+        };
+        std::fs::write(recording.join("source.json"), r#"{"duration_s":12.5}"#).unwrap();
+        let summary = record_summary(temp.path(), manifest());
+        assert_eq!(summary.duration_s, Some(12.5));
+        assert!(summary.source_error.is_none());
+        let json = serde_json::to_value(summary).unwrap();
+        assert_eq!(json["id"], "record-1");
+        assert_eq!(json["duration_s"], 12.5);
+        std::fs::write(recording.join("source.json"), "invalid json").unwrap();
+        let summary = record_summary(temp.path(), manifest());
+        assert!(summary.duration_s.is_none());
+        assert!(summary.source_error.is_some());
+        std::fs::write(recording.join("source.json"), r#"{"duration_s":-1}"#).unwrap();
+        assert!(record_summary(temp.path(), manifest()).duration_s.is_none());
+        let mut native = manifest();
+        native.artifacts.clear();
+        let summary = record_summary(temp.path(), native);
+        assert!(summary.duration_s.is_none());
+        assert!(summary.source_error.is_none());
+    }
+
+    #[test]
+    fn corrupt_verification_history_keeps_catalog_browsable_and_can_be_rebuilt() {
+        tauri::async_runtime::block_on(async {
+            let temp = tempfile::tempdir().unwrap();
+            engine::project::init(temp.path(), "Cache recovery").unwrap();
+            let source = test_support::recording(temp.path());
+            let root = temp.path().to_str().unwrap().to_string();
+            experience_import(root.clone(), source.display().to_string())
+                .await
+                .unwrap();
+            let cache = project_store(&root).unwrap().join(".verification.json");
+            for damaged in ["broken", r#"{"version":99,"reports":{}}"#] {
+                std::fs::write(&cache, damaged).unwrap();
+                let catalog = experience_list(root.clone()).await.unwrap();
+                assert_eq!(catalog.records.len(), 1);
+                assert!(catalog.records[0].verification.is_none());
+                assert!(catalog.warning.unwrap().contains("Verify all"));
+                assert_eq!(std::fs::read_to_string(&cache).unwrap(), damaged);
+                assert!(experience_inspect(root.clone(), "example-001".into())
+                    .await
+                    .is_ok());
+                assert!(experience_verify(root.clone()).await.unwrap()[0].valid);
+                let restored = experience_list(root.clone()).await.unwrap();
+                assert!(restored.warning.is_none());
+                assert_eq!(
+                    restored.records[0].verification.as_ref().unwrap().status,
+                    "verified"
+                );
+            }
+        });
+    }
+
     #[test]
     fn requires_existing_project_and_uses_cli_store() {
         let temp = tempfile::tempdir().unwrap();
@@ -116,12 +297,15 @@ mod tests {
             engine::project::init(temp.path(), "CLI project").unwrap();
             let project = experience_project(root.clone(), None).await.unwrap();
             assert_eq!(project.project.name, "CLI project");
-            let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../examples/recording");
+            let source = test_support::recording(temp.path());
             let imported = experience_import(root.clone(), source.display().to_string())
                 .await
                 .unwrap();
             let id = imported[0].id.clone();
-            assert_eq!(experience_list(root.clone()).await.unwrap().len(), 1);
+            assert_eq!(
+                experience_list(root.clone()).await.unwrap().records.len(),
+                1
+            );
             assert_eq!(
                 experience_inspect(root.clone(), id.clone())
                     .await
@@ -151,6 +335,62 @@ mod tests {
                 reviews[&id].revisions[0].review.assistance,
                 engine::annotations::Assistance::Yes
             );
+            // A reopened project reads the saved review from disk, then permits
+            // a new revision without erasing the original judgment.
+            let reopened = experience_project(root.clone(), None).await.unwrap();
+            let reopened_root = reopened.root.display().to_string();
+            let persisted = experience_reviews(reopened_root.clone()).await.unwrap();
+            let mut updated = persisted[&id].revisions[0].review.clone();
+            updated.outcome = engine::annotations::Outcome::Unknown;
+            updated.notes = "Insufficient evidence after a second look".into();
+            let saved = experience_annotate(reopened_root.clone(), id.clone(), 1, updated.clone())
+                .await
+                .unwrap();
+            assert_eq!(saved.revisions.len(), 2);
+            assert!(
+                experience_annotate(reopened_root.clone(), id.clone(), 1, updated)
+                    .await
+                    .is_err()
+            );
+            let persisted = experience_reviews(reopened_root).await.unwrap();
+            assert_eq!(persisted[&id].revisions.len(), 2);
+            assert_eq!(
+                persisted[&id].revisions[0].review.outcome,
+                engine::annotations::Outcome::Success
+            );
+            assert_eq!(
+                persisted[&id].revisions[1].review.outcome,
+                engine::annotations::Outcome::Unknown
+            );
+            let set = learning_set_create(
+                root.clone(),
+                engine::learning_sets::CreateSet {
+                    name: "Recovery evidence".into(),
+                    learning_goal: "Understand grasp failures".into(),
+                    curator: "Operator".into(),
+                    selections: vec![engine::learning_sets::Selection {
+                        experience_id: id.clone(),
+                        review_revision: 2,
+                        reason: "Human recovery worth inspecting".into(),
+                    }],
+                },
+            )
+            .await
+            .unwrap();
+            assert_eq!(learning_set_list(root.clone()).await.unwrap().len(), 1);
+            let selection_export = learning_set_export(root.clone(), set.id.clone(), root.clone())
+                .await
+                .unwrap();
+            assert!(Path::new(&selection_export).is_file());
+            let bundle = learning_set_export_files(root.clone(), set.id, root.clone())
+                .await
+                .unwrap();
+            assert!(Path::new(&bundle).join("learning-set.json").is_file());
+            assert!(Path::new(&bundle)
+                .join("recordings")
+                .join(&id)
+                .join("state.jsonl")
+                .is_file());
             let destination = temp.path().join("exports");
             std::fs::create_dir(&destination).unwrap();
             let exported =
@@ -174,17 +414,46 @@ mod tests {
                 "broken",
             )
             .unwrap();
-            assert_eq!(experience_list(root.clone()).await.unwrap().len(), 1);
+            assert_eq!(
+                experience_list(root.clone()).await.unwrap().records.len(),
+                1
+            );
             assert!(!experience_verify(root.clone()).await.unwrap()[0].valid);
-            assert!(experience_inspect(root, id).await.is_err());
+            // Browsing still works with damaged or absent payloads, while
+            // operations that consume them continue to enforce integrity.
+            assert_eq!(
+                experience_inspect(root.clone(), id.clone())
+                    .await
+                    .unwrap()
+                    .annotations
+                    .revisions
+                    .len(),
+                2
+            );
+            std::fs::remove_file(project_store(&root).unwrap().join(&id).join("state.jsonl"))
+                .unwrap();
+            assert!(experience_inspect(root.clone(), id.clone()).await.is_ok());
+            assert!(engine::inspect_experience(&project_store(&root).unwrap(), &id).is_err());
+            assert!(experience_export(
+                root,
+                id,
+                temp.path().join("missing-export").display().to_string()
+            )
+            .await
+            .is_err());
         });
     }
 }
 
 #[tauri::command]
-pub async fn experience_replay(root: String, id: String) -> Result<(), String> {
+pub async fn experience_replay(
+    root: String,
+    id: String,
+    viewer_path: Option<String>,
+) -> Result<(), String> {
     blocking(move || {
-        let viewer = std::env::var_os("HUMAAN_RERUN_PATH").map(PathBuf::from)
+        let viewer = viewer_path.filter(|path| !path.trim().is_empty()).map(PathBuf::from)
+            .or_else(|| std::env::var_os("HUMAAN_RERUN_PATH").map(PathBuf::from))
             .unwrap_or_else(|| {
                 let cargo_binary = std::env::var_os("HOME").map(PathBuf::from)
                     .map(|home| home.join(".cargo/bin").join(if cfg!(windows) { "rerun.exe" } else { "rerun" }));
@@ -212,15 +481,21 @@ pub async fn experience_reviews(
 ) -> Result<std::collections::BTreeMap<String, engine::annotations::Annotations>, String> {
     blocking(move || {
         let store = project_store(&root)?;
-        engine::list_metadata(&store)
-            .map_err(|e| e.to_string())?
-            .into_iter()
-            .map(|m| {
-                engine::annotations::read(&store.join(&m.id), &m.id)
-                    .map(|a| (m.id, a))
-                    .map_err(|e| e.to_string())
-            })
-            .collect()
+        let mut reviews = std::collections::BTreeMap::new();
+        if !store.exists() {
+            return Ok(reviews);
+        }
+        for entry in std::fs::read_dir(&store).map_err(|e| e.to_string())? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let id = entry.file_name().to_string_lossy().into_owned();
+            if id.starts_with('.') || engine::experience_metadata(&store, &id).is_err() {
+                continue;
+            }
+            let annotations =
+                engine::annotations::read(&store.join(&id), &id).map_err(|e| e.to_string())?;
+            reviews.insert(id, annotations);
+        }
+        Ok(reviews)
     })
     .await
 }
@@ -237,4 +512,106 @@ pub async fn experience_annotate(
             .map_err(|e| e.to_string())
     })
     .await
+}
+
+#[tauri::command]
+pub async fn learning_set_list(
+    root: String,
+) -> Result<Vec<engine::learning_sets::LearningSet>, String> {
+    blocking(move || engine::learning_sets::list(Path::new(&root)).map_err(|e| e.to_string())).await
+}
+#[tauri::command]
+pub async fn learning_set_create(
+    root: String,
+    input: engine::learning_sets::CreateSet,
+) -> Result<engine::learning_sets::LearningSet, String> {
+    blocking(move || {
+        engine::learning_sets::create(Path::new(&root), input).map_err(|e| e.to_string())
+    })
+    .await
+}
+#[tauri::command]
+pub async fn learning_set_export(
+    root: String,
+    id: String,
+    parent: String,
+) -> Result<String, String> {
+    blocking(move || {
+        engine::learning_sets::export(Path::new(&root), &id, Path::new(&parent))
+            .map(|path| path.display().to_string())
+            .map_err(|e| e.to_string())
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn learning_set_export_files(
+    root: String,
+    id: String,
+    parent: String,
+) -> Result<String, String> {
+    blocking(move || {
+        engine::learning_sets::export_files(Path::new(&root), &id, Path::new(&parent))
+            .map(|path| path.display().to_string())
+            .map_err(|e| e.to_string())
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn learning_set_prepare(
+    app: tauri::AppHandle,
+    root: String,
+    id: String,
+    parent: String,
+    config: engine::dataset_preparation::PreparationConfig,
+) -> Result<String, String> {
+    let environment = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("dataset-tools");
+    blocking(move || {
+        engine::dataset_preparation::prepare(
+            Path::new(&root),
+            &id,
+            Path::new(&parent),
+            config,
+            &environment,
+        )
+        .map(|path| path.display().to_string())
+        .map_err(|e| e.to_string())
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn dataset_tools_status(
+    app: tauri::AppHandle,
+) -> Result<engine::dataset_environment::Status, String> {
+    let directory = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("dataset-tools");
+    blocking(move || {
+        if let Some(python) = std::env::var_os("HUMAAN_DATASET_PYTHON") {
+            let exists = Path::new(&python).is_file();
+            return Ok(engine::dataset_environment::Status { ready: exists,
+                custom: true, installing: false, phase: "Using custom dataset tools".into(), error: (!exists).then(|| "The custom Python executable is missing. Update HUMAAN_DATASET_PYTHON or unset it to use managed tools.".into()) });
+        }
+        engine::dataset_environment::status(&directory).map_err(|e| e.to_string())
+    }).await
+}
+#[tauri::command]
+pub async fn dataset_tools_install(
+    app: tauri::AppHandle,
+) -> Result<engine::dataset_environment::Status, String> {
+    let directory = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("dataset-tools");
+    blocking(move || engine::dataset_environment::install(&directory).map_err(|e| e.to_string()))
+        .await
 }

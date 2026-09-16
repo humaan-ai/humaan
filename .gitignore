@@ -2,6 +2,9 @@
 /target/
 /.humaan/
 
+# Generated example datasets
+/examples/recording/prepared-*/
+
 # Node / Bun
 node_modules/
 
@@ -40,3 +43,25 @@ apps/desktop/src-tauri/target/release/bundle/
 Thumbs.db
 *.log
 *.pid
+
+# Local planning notes and release output
+/.local-notes/
+/dist/
+
+# Apple signing material (never commit private keys)
+*.p12
+*.pfx
+*.p8
+*.key
+*.pem
+*.cer
+*.mobileprovision
+*.provisionprofile
+*.keychain
+*.keychain-db
+
+# Python caches and virtual environments
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/

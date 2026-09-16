@@ -6,3 +6,6 @@ members = [
     "crates/humaan-kernel",
     "apps/desktop/src-tauri",
 ]
+
+[workspace.package]
+license = "Apache-2.0"

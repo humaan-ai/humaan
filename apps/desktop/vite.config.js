@@ -8,16 +8,6 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(async () => ({
   plugins: [tailwindcss(), sveltekit()],
 
-  optimizeDeps: {
-    include: [
-      "codemirror",
-      "@codemirror/state",
-      "@codemirror/view",
-      "@cmshiki/shiki",
-      "@replit/codemirror-minimap"
-    ]
-  },
-
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent Vite from obscuring rust errors

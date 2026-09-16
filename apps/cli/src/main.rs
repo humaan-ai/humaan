@@ -7,7 +7,7 @@ mod progress;
 #[command(
     name = "humaan",
     version,
-    about = "Import, inspect, and export robot experiences offline"
+    about = "A local, offline CLI for managing robot experiences."
 )]
 struct Cli {
     /// Override the project's recording store
@@ -27,7 +27,7 @@ enum Command {
         #[command(subcommand)]
         command: ProjectCommand,
     },
-    /// Import a Humaan recording or auto-detect a LeRobot v3.0 dataset
+    /// Import a dataset (supports LeRobot v3.0)
     // TODO: Add an explicit `--format` override if more adapters make detection ambiguous.
     Import { source: PathBuf },
     /// List local experiences and verify their artifacts
@@ -41,12 +41,6 @@ enum Command {
     Verify,
     /// Export original files to a new directory
     Export { id: String, destination: PathBuf },
-    /// Link a local project to a cloud workspace and project (coming soon)
-    Link,
-    /// Push local experiences to the cloud (coming soon)
-    Push,
-    /// Pull experiences from the cloud (coming soon)
-    Pull,
 }
 
 #[derive(Subcommand)]
@@ -143,18 +137,6 @@ fn run(cli: Cli) -> engine::Result<std::process::ExitCode> {
             "Exported",
             vec![engine::export(&store()?, &id, &destination)?],
         ),
-        Command::Link | Command::Push | Command::Pull => {
-            let message = "Cloud linking, push, and pull are coming soon.";
-            if cli.json {
-                println!(
-                    "{}",
-                    serde_json::json!({ "status": "coming_soon", "message": message })
-                );
-            } else {
-                eprintln!("{message}");
-            }
-            return Ok(std::process::ExitCode::FAILURE);
-        }
     };
     drop(progress);
     if cli.json {

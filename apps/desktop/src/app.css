@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Palette: Cursor Dark */
+/* Cursor Dark surfaces and text hierarchy. */
 @theme {
   --color-background: #1a1a1a; /* editor.background */
   --color-surface: #141414; /* sideBar / titleBar / statusBar */
@@ -8,8 +8,9 @@
   --color-border: #ffffff0d; /* sideBar / statusBar / panel borders */
   --color-border-strong: #2a2a2a; /* input / dropdown / widget borders */
 
-  --color-foreground: #ccccccdd;
-  --color-muted: #909090;
+  --color-title: #f0f0f0;
+  --color-foreground: #f0f0f0bd;
+  --color-muted: #f0f0f0bd;
 
   --color-accent: #4c9df3; /* buttons, focus ring, badges, links */
   --color-accent-hover: #66aefa;
@@ -61,6 +62,10 @@
 
   body {
     @apply bg-background font-sans text-foreground antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply text-title;
   }
 
   button:not(:disabled),

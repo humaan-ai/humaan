@@ -1,8 +1,9 @@
 [package]
+license.workspace = true
 name = "humaan-cli"
 version = "0.0.1-alpha.0"
 edition = "2024"
-description = "Offline recording tools for Humaan"
+description = "A local, offline CLI for managing robot experiences."
 
 [[bin]]
 name = "humaan"

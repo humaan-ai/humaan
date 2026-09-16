@@ -1,8 +1,8 @@
 # Recording format v1
 
 An experience is a recorded robot attempt at a task. Its recording is a directory containing `manifest.json` and its declared artifacts.
-See [the sample recording](../../examples/recording/manifest.json) for a complete,
-importable example with synthetic joint state and action data.
+The [test fixture helper](../../tests/support/recording.rs) generates a minimal
+synthetic recording used by automated tests.
 
 The manifest has these required fields:
 
@@ -36,9 +36,9 @@ coordinate-frame, and sensor metadata remain future work. This version does not
 claim a universal robotics recording standard. The LeRobot adapter described below
 preserves source-specific metadata within declared artifacts.
 
-The sample `state.jsonl` has one synthetic record. `timestamp_ns` is elapsed time
-from the experience start; `position_rad` and `action_rad` are joint position and
-command arrays in radians. Other artifact formats remain opaque to the engine.
+The manifest records artifact formats without defining their internal schemas.
+Artifact payloads remain opaque to the core recording importer; adapters define
+any format-specific interpretation.
 
 ## LeRobot import provenance
 

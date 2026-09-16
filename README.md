@@ -1,40 +1,79 @@
 # Humaan
-> Building blocks for Physical AI — perceive, reason, learn, and act in the physical world.
 
-Humaan is a platform and framework for Physical AI that helps robots perceive, reason, learn, and act in the physical world. We turn the complexity of robotics engineering — perception, reasoning, and motion — into modular building blocks, so builders can assemble intelligent machines fast — without reinventing the brain.
+**Building blocks for Physical AI.**
 
-> [!WARNING]
-> Humaan is currently in development. Expect breaking changes and bugs as the project evolves.
+Humaan Studio is a desktop workspace for assembling machine intelligence.
+Humaan CLI provides terminal tools for working with robot experiences. Both share
+a local Rust engine and work without cloud signup.
 
+Humaan is in early alpha. Interfaces and data formats may change.
 
-## Why Humaan
+## Available today
 
-Building a robot today means rebuilding the same foundations every time — perception pipelines, motion control, simulation rigs, hardware integration — before writing a single line of your actual product. Humaan replaces that groundwork with composable blocks: compose, validate in simulation, deploy to hardware. Write behavior, not boilerplate.
+- **Studio:** import and inspect experiences, review outcomes and assistance,
+  curate learning sets, and prepare supported LeRobot training datasets.
+- **CLI:** initialize local projects and import, list, inspect, verify, and export
+  Humaan recordings and LeRobot v3.0 datasets.
+- **Shared engine:** recording validation, local storage, review history, learning
+  sets, and dataset preparation. Studio can launch a separately installed Rerun
+  viewer for replay.
 
-## Core Architecture — Three Pillars
+Live capture and robot control, model training, policy evaluation, deployment,
+and cloud transfer remain planned. The `humaan-kernel` crate is a placeholder,
+not an implemented robot operating system.
 
-### 1. The Bricks — Modular Anatomy of Robots
+## Get started
 
-Intelligence in pieces. Perception, reasoning, and motion broken into reusable modular blocks. Compose robot behavior from building blocks instead of rebuilding foundational code each time.
+To build the CLI from source, install Rust and run from the repository root:
 
-### 2. The Sandbox — Physics Simulator
+```sh
+cargo install --path apps/cli --locked
+humaan --help
+```
 
-A low-risk testing environment. Test and iterate on robot behavior in simulation before touching real hardware — failures are cheap and safe, so robots can fail and improve many times before deployment.
+To develop Studio, install Rust and Bun, then run:
 
-### 3. The Live-Link — Production-Ready Hardware Bridge
+```sh
+cd apps/desktop
+bun install --frozen-lockfile
+bun run tauri dev
+```
 
-Sim-to-real deployment. Once a behavior works in the Sandbox, deploy it to physical hardware with confidence that the robot moves in line with what was validated in simulation.
+Native desktop dependencies vary by platform. The current macOS packaging
+workflow targets Apple Silicon and requires full Xcode for the native icon.
+See the [Studio guide](apps/desktop/README.md) and [CLI guide](apps/cli/README.md)
+for setup and supported workflows.
 
-## CLI
+## Repository layout
 
-Initialize a local project in the current directory with `humaan project init <name>`.
-Each project has its own identity and experiences, without a workspace or account.
+| Path | Purpose |
+| --- | --- |
+| `apps/desktop` | Humaan Studio: Tauri, SvelteKit, and TypeScript |
+| `apps/cli` | Humaan CLI |
+| `crates/engine` | Shared local Rust engine |
+| `crates/humaan-kernel` | Reserved robot OS placeholder |
+| `specs` | Recording and learning-set format contracts |
+| `tools/dataset-preparation` | Python tools embedded by the engine |
+| `tests/support` | Shared synthetic test fixtures |
 
-The offline CLI supports importing, listing, inspecting, and exporting local
-recordings with checksum verification. Install with `cargo install --path apps/cli --locked`,
-then run `humaan --help`. See the [CLI guide](apps/cli/README.md) for a runnable
-sample and the [recording format](specs/recording-format/README.md) for input requirements.
+## Releases and validation
 
-## Status & Contributing
+Studio and CLI have independent versions: `studio-v<version>` and
+`cli-v<version>`. The current GitHub workflows produce signed and notarized
+Apple Silicon test artifacts; automated public release publishing and additional
+platform packages are not implemented yet.
 
-Humaan is in active development and not yet ready for production use. Issues, feedback, and contributions are welcome as the platform takes shape.
+- [Studio signing workflow](.github/workflows/macos-signing.yml)
+- [CLI signing workflow](.github/workflows/cli-macos-signing.yml)
+- [Recording format](specs/recording-format/README.md)
+- [Learning-set format](specs/learning-set-format/README.md)
+
+Keep Cargo commands at the repository root and Bun commands in `apps/desktop`.
+Each application guide lists its validation commands.
+
+## License
+
+Humaan's original code and documentation in this repository are licensed under
+[Apache License 2.0](LICENSE), unless otherwise noted. Third-party dependencies
+retain their respective licenses. The license does not grant rights to use
+Humaan trademarks except as provided in its terms.

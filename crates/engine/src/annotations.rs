@@ -104,19 +104,21 @@ pub fn save(
     let directory = store.join(id);
     regular_file(&directory, "manifest.json")?;
     let lock_path = directory.join(".annotation-lock");
-    let lock = fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&lock_path)
-        .map_err(|e| invalid(format!("Cannot lock annotation for writing: {e}")))?;
-    struct Lock(std::path::PathBuf, fs::File);
-    impl Drop for Lock {
-        fn drop(&mut self) {
-            let _ = self.1.sync_all();
-            let _ = fs::remove_file(&self.0);
-        }
+    // Keep the file in place: deleting it would let writers lock different inodes.
+    if fs::symlink_metadata(&lock_path).is_ok() {
+        regular_file(&directory, ".annotation-lock")?;
     }
-    let _lock = Lock(lock_path, lock);
+    let lock = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(&lock_path)
+        .map_err(|e| invalid(format!("Cannot open annotation lock: {e}")))?;
+    lock.try_lock()
+        .map_err(|e| invalid(format!("Cannot lock annotation for writing: {e}")))?;
+    // Closing this handle releases the OS lock, including on process termination.
+    let _lock = lock;
     let manifest: crate::Manifest =
         serde_json::from_slice(&fs::read(regular_file(&directory, "manifest.json")?)?)?;
     if manifest.id != id

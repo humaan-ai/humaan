@@ -77,7 +77,7 @@ fn checksum(path: &Path) -> Result<(u64, String)> {
         hash.update(&buffer[..n]);
         size += n as u64;
     }
-    Ok((size, format!("{:x}", hash.finalize())))
+    Ok((size, hex::encode(hash.finalize())))
 }
 
 struct Episode {
@@ -331,7 +331,7 @@ pub fn import(store: &Path, source: &Path) -> Result<Vec<Manifest>> {
             },
         );
     }
-    let dataset_id = format!("{:x}", identity.finalize());
+    let dataset_id = hex::encode(identity.finalize());
     let mut manifests = vec![];
     for episode in episodes.values() {
         let id = format!("lr-{dataset_id}-{:06}", episode.index);

@@ -1,6 +1,6 @@
 # Humaan CLI
 
-Offline import, inspection, and export of robot experiences. No account or local
+A local, offline CLI for managing robot experiences. No account or local
 server is required. Install from the repository root with a Rust toolchain:
 
 ```sh
@@ -13,16 +13,17 @@ animated activity indicator with elapsed time while processing. It clears before
 results or errors appear. This indicates ongoing work, not a completion percentage.
 Animation is disabled with `--json` or when stderr is redirected.
 
-Try the included synthetic recording from the repository root:
+With an existing Humaan recording directory, try the following from a disposable
+project directory. Replace the source path and experience ID with your own:
 
 ```sh
-cargo run -p humaan-cli -- project init my-robot
-cargo run -p humaan-cli -- project show
-cargo run -p humaan-cli -- import examples/recording
-cargo run -p humaan-cli -- list
-cargo run -p humaan-cli -- inspect example-001 --json
-cargo run -p humaan-cli -- verify
-cargo run -p humaan-cli -- export example-001 ./exported-recording
+humaan project init my-robot
+humaan project show
+humaan import /path/to/recording
+humaan list
+humaan inspect EXPERIENCE_ID --json
+humaan verify
+humaan export EXPERIENCE_ID ./exported-recording
 ```
 
 `humaan project init <name>` initializes the current directory as a local project.
@@ -37,7 +38,7 @@ Recording commands search the current directory and its parents for project
 metadata and use that project's `.humaan/recordings` store. Without a project,
 they retain the current-directory `.humaan/recordings` default. Invalid project
 metadata produces an error. Use `--store /path/to/recordings` on recording commands
-to override project discovery. Project and cloud placeholder commands ignore it.
+to override project discovery. Project commands ignore it.
 
 `--json` emits an array of manifests for import, list, inspect, and export. LeRobot
 inspection also includes a `source` object with episode provenance and feature metadata. Errors go to stderr with
@@ -91,17 +92,13 @@ crash-atomic across an entire batch, so do not interrupt it or modify the store 
 
 Export preserves the original referenced chunk files plus Humaan's manifest and
 episode provenance. A shared chunk may contain other episodes; export does not trim
-videos or produce a standalone LeRobot training dataset. Dataset preparation remains
-future work. Large imports require space for the copied files, and verification
+videos or produce a standalone LeRobot training dataset. Dataset preparation is available in Studio for supported learning sets; the CLI
+does not yet expose a preparation command. Large imports require space for the copied files, and verification
 reads shared files again for each experience.
 
 The reusable `humaan-engine` crate owns these operations. Live hardware capture,
-cloud storage, and desktop integration are not implemented yet.
-
-`humaan link`, `humaan push`, and `humaan pull` are placeholders that display
-“Cloud linking, push, and pull are coming soon.” They do not access the network
-or change local files and exit with code 1 because the operation is unavailable.
-With `--json`, they emit an object with `status: "coming_soon"` and `message`.
+and cloud storage are not implemented yet. Studio already uses the shared engine
+for local project, experience, review, curation, and preparation workflows.
 
 Validation:
 
@@ -109,3 +106,9 @@ Validation:
 cargo check -p humaan-cli -p humaan-engine
 cargo test -p humaan-cli -p humaan-engine
 ```
+
+## Releases
+
+CLI releases use `cli-v<version>` independently of Studio. The
+[macOS workflow](../../.github/workflows/cli-macos-signing.yml) builds and notarizes
+Apple Silicon CLI artifacts.

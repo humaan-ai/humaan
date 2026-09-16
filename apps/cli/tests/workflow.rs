@@ -1,3 +1,6 @@
+#[path = "../../../tests/support/recording.rs"]
+mod support;
+
 use std::{
     fs,
     path::Path,
@@ -12,17 +15,15 @@ fn cli(store: &Path, args: &[&str]) -> Output {
         .output()
         .unwrap()
 }
-fn fixture() -> std::path::PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/recording")
-}
 
 #[test]
 fn offline_round_trip_and_duplicate_protection() {
     let temp = tempfile::tempdir().unwrap();
+    let fixture = support::recording(temp.path());
     let store = temp.path().join("store");
     assert!(cli(&store, &["list"]).status.success());
     assert!(!store.exists());
-    let imported = cli(&store, &["import", fixture().to_str().unwrap(), "--json"]);
+    let imported = cli(&store, &["import", fixture.to_str().unwrap(), "--json"]);
     assert!(
         imported.status.success(),
         "{}",
@@ -35,7 +36,7 @@ fn offline_round_trip_and_duplicate_protection() {
     );
     assert_eq!(json[0]["id"], "example-001");
     assert!(
-        !cli(&store, &["import", fixture().to_str().unwrap()])
+        !cli(&store, &["import", fixture.to_str().unwrap()])
             .status
             .success()
     );
@@ -57,7 +58,7 @@ fn offline_round_trip_and_duplicate_protection() {
     );
     for file in ["manifest.json", "state.jsonl"] {
         assert_eq!(
-            fs::read(fixture().join(file)).unwrap(),
+            fs::read(fixture.join(file)).unwrap(),
             fs::read(exported.join(file)).unwrap()
         );
     }
@@ -86,11 +87,12 @@ fn offline_round_trip_and_duplicate_protection() {
 #[test]
 fn invalid_recordings_never_enter_store() {
     let temp = tempfile::tempdir().unwrap();
+    let fixture = support::recording(temp.path());
     let store = temp.path().join("store");
     let source = temp.path().join("source");
     fs::create_dir(&source).unwrap();
     let original: serde_json::Value =
-        serde_json::from_slice(&fs::read(fixture().join("manifest.json")).unwrap()).unwrap();
+        serde_json::from_slice(&fs::read(fixture.join("manifest.json")).unwrap()).unwrap();
     for case in 0..5 {
         let mut manifest = original.clone();
         match case {
@@ -100,7 +102,7 @@ fn invalid_recordings_never_enter_store() {
             3 => manifest["artifacts"][0]["sha256"] = "bad".into(),
             _ => manifest["artifacts"][0]["path"] = "missing".into(),
         }
-        fs::copy(fixture().join("state.jsonl"), source.join("state.jsonl")).unwrap();
+        fs::copy(fixture.join("state.jsonl"), source.join("state.jsonl")).unwrap();
         fs::write(
             source.join("manifest.json"),
             serde_json::to_vec(&manifest).unwrap(),
@@ -120,14 +122,11 @@ fn invalid_recordings_never_enter_store() {
 #[test]
 fn rejects_symlink_artifacts() {
     let temp = tempfile::tempdir().unwrap();
+    let fixture = support::recording(temp.path());
     let source = temp.path().join("source");
     fs::create_dir(&source).unwrap();
-    fs::copy(
-        fixture().join("manifest.json"),
-        source.join("manifest.json"),
-    )
-    .unwrap();
-    std::os::unix::fs::symlink(fixture().join("state.jsonl"), source.join("state.jsonl")).unwrap();
+    fs::copy(fixture.join("manifest.json"), source.join("manifest.json")).unwrap();
+    std::os::unix::fs::symlink(fixture.join("state.jsonl"), source.join("state.jsonl")).unwrap();
     assert!(
         !cli(
             &temp.path().join("store"),
@@ -149,6 +148,7 @@ fn in_project(directory: &Path, args: &[&str]) -> Output {
 #[test]
 fn project_identity_discovery_and_isolation() {
     let temp = tempfile::tempdir().unwrap();
+    let fixture = support::recording(temp.path());
     let first = temp.path().join("first");
     let second = temp.path().join("second");
     fs::create_dir(&first).unwrap();
@@ -179,7 +179,7 @@ fn project_identity_discovery_and_isolation() {
         metadata
     );
     assert!(
-        in_project(&nested, &["import", fixture().to_str().unwrap()])
+        in_project(&nested, &["import", fixture.to_str().unwrap()])
             .status
             .success()
     );
@@ -212,6 +212,7 @@ fn project_identity_discovery_and_isolation() {
 #[test]
 fn initializing_preserves_existing_recordings_and_rejects_empty_names() {
     let temp = tempfile::tempdir().unwrap();
+    let fixture = support::recording(temp.path());
     assert!(
         !in_project(temp.path(), &["project", "init", " "])
             .status
@@ -224,7 +225,7 @@ fn initializing_preserves_existing_recordings_and_rejects_empty_names() {
             .success()
     );
     assert!(
-        in_project(temp.path(), &["import", fixture().to_str().unwrap()])
+        in_project(temp.path(), &["import", fixture.to_str().unwrap()])
             .status
             .success()
     );
@@ -243,6 +244,7 @@ fn initializing_preserves_existing_recordings_and_rejects_empty_names() {
 #[test]
 fn verification_reports_all_entries_without_modifying_recordings() {
     let temp = tempfile::tempdir().unwrap();
+    let fixture = support::recording(temp.path());
     let store = temp.path().join("store");
     let empty = cli(&store, &["verify", "--json"]);
     assert!(empty.status.success());
@@ -252,7 +254,7 @@ fn verification_reports_all_entries_without_modifying_recordings() {
     );
     assert!(!store.exists());
     assert!(
-        cli(&store, &["import", fixture().to_str().unwrap()])
+        cli(&store, &["import", fixture.to_str().unwrap()])
             .status
             .success()
     );
@@ -297,4 +299,27 @@ fn verification_reports_all_entries_without_modifying_recordings() {
             .unwrap()
             .contains("integrity check failed")
     );
+}
+
+#[test]
+fn unreleased_cloud_commands_are_not_available() {
+    let temp = tempfile::tempdir().unwrap();
+    let store = temp.path().join("store");
+    let help = cli(&store, &["--help"]);
+    assert!(help.status.success());
+    let help = String::from_utf8(help.stdout).unwrap();
+    for command in ["link", "push", "pull"] {
+        assert!(
+            !help
+                .lines()
+                .any(|line| line.split_whitespace().next() == Some(command))
+        );
+        for args in [vec![command], vec![command, "--json"]] {
+            let output = cli(&store, &args);
+            assert_eq!(output.status.code(), Some(2));
+            assert!(output.stdout.is_empty());
+            assert!(String::from_utf8_lossy(&output.stderr).contains("unrecognized subcommand"));
+        }
+    }
+    assert!(!store.exists());
 }
