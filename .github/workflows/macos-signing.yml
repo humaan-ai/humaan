@@ -2,6 +2,11 @@ name: Studio macOS signing
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Existing studio-v tag to build and attach to its release (blank: test only)'
+        required: false
+        type: string
   push:
     tags:
       - 'studio-v*'
@@ -10,14 +15,16 @@ permissions:
   contents: read
 
 concurrency:
-  group: studio-macos-signing-${{ github.ref }}
+  group: studio-macos-signing-${{ inputs.release_tag || github.ref }}
   cancel-in-progress: false
 
 jobs:
   studio:
     name: Sign and notarize Studio (Apple Silicon)
     runs-on: macos-26
-    timeout-minutes: 90
+    outputs:
+      release_tag: ${{ steps.version.outputs.release_tag }}
+    timeout-minutes: 120
     defaults:
       run:
         shell: bash
@@ -25,6 +32,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          ref: ${{ inputs.release_tag && format('refs/tags/{0}', inputs.release_tag) || github.ref }}
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -39,19 +47,21 @@ jobs:
           xcrun actool --version --output-format=human-readable-text
 
       - name: Check version
+        id: version
         env:
-          REF_TYPE: ${{ github.ref_type }}
-          REF_NAME: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.release_tag || (github.ref_type == 'tag' && github.ref_name) || '' }}
         run: |
           bun -e '
             const config = await Bun.file("apps/desktop/src-tauri/tauri.conf.json").json();
             if (!/^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/.test(config.version)) {
               throw new Error("Unsupported release version");
             }
-            if (process.env.REF_TYPE === "tag" && process.env.REF_NAME !== `studio-v${config.version}`) {
+            const tag = process.env.RELEASE_TAG;
+            if (tag && tag !== `studio-v${config.version}`) {
               throw new Error("Tag must be studio-v followed by the Studio version in tauri.conf.json");
             }
           '
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
 
       - name: Install frontend dependencies
         working-directory: apps/desktop
@@ -105,7 +115,7 @@ jobs:
           : "${APPLE_ID:?Missing APPLE_ID}"
           : "${APPLE_PASSWORD:?Missing APPLE_PASSWORD}"
           : "${APPLE_TEAM_ID:?Missing APPLE_TEAM_ID}"
-          bun run tauri build --bundles app --ci -- --locked
+          bun run tauri build --bundles app,dmg --ci -- --locked
 
       - name: Verify and archive the notarized app
         run: |
@@ -117,8 +127,55 @@ jobs:
           version="$(bun -p 'require("./apps/desktop/src-tauri/tauri.conf.json").version')"
           mkdir -p dist
           ditto -c -k --keepParent "$app_path" "dist/Humaan_${version}_aarch64.app.zip"
+
+      - name: Sign and notarize the DMG
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          shopt -s nullglob
+          dmgs=(target/release/bundle/dmg/*.dmg)
+          test "${#dmgs[@]}" -eq 1
+          dmg="${dmgs[0]}"
+          codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$dmg"
+          xcrun notarytool store-credentials studio-dmg-ci \
+            --keychain "$RUNNER_TEMP/humaan-signing.keychain-db" \
+            --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID"
+          submit_exit=0
+          xcrun notarytool submit "$dmg" \
+            --keychain "$RUNNER_TEMP/humaan-signing.keychain-db" \
+            --keychain-profile studio-dmg-ci --wait --timeout 30m --output-format json \
+            > "$RUNNER_TEMP/studio-dmg-notarization.json" || submit_exit=$?
+          cat "$RUNNER_TEMP/studio-dmg-notarization.json"
+          submission_id="$(jq -r '.id // empty' "$RUNNER_TEMP/studio-dmg-notarization.json")"
+          if [[ -n "$submission_id" ]]; then
+            xcrun notarytool log "$submission_id" \
+              --keychain "$RUNNER_TEMP/humaan-signing.keychain-db" \
+              --keychain-profile studio-dmg-ci "$RUNNER_TEMP/studio-dmg-notarization-log.json" || true
+          fi
+          test "$submit_exit" -eq 0
+          jq -e '.status == "Accepted"' "$RUNNER_TEMP/studio-dmg-notarization.json"
+          xcrun stapler staple "$dmg"
+          xcrun stapler validate "$dmg"
+          codesign --verify --strict --verbose=2 "$dmg"
+          hdiutil verify "$dmg"
+          spctl --assess --type open --context context:primary-signature --verbose=4 "$dmg"
+          cp "$dmg" dist/
           cd dist
-          shasum -a 256 ./*.zip > SHA256SUMS
+          shasum -a 256 ./*.zip ./*.dmg > SHA256SUMS
+
+      - name: Upload DMG notarization diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: studio-dmg-notarization-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/studio-dmg-notarization.json
+            ${{ runner.temp }}/studio-dmg-notarization-log.json
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload verified download
         uses: actions/upload-artifact@v4
@@ -136,3 +193,28 @@ jobs:
             security delete-keychain "$keychain_path"
           fi
           rm -f "$RUNNER_TEMP/humaan-signing.p12"
+
+  attach-release:
+    name: Attach verified Studio downloads
+    needs: studio
+    if: needs.studio.outputs.release_tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: humaan-studio-macos-aarch64-${{ github.run_id }}
+          path: dist
+
+      - name: Upload to the existing release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.studio.outputs.release_tag }}
+        shell: bash
+        run: |
+          gh release view "$RELEASE_TAG" --json tagName
+          cd dist
+          sha256sum --check SHA256SUMS
+          gh release upload "$RELEASE_TAG" ./*.dmg ./*.zip SHA256SUMS --clobber
