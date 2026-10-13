@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Button } from "$lib/components/ui/button/index.js";
   import { statusRank } from "$lib/record-sorting";
   import { createTable, createSortedRowModel, rowSortingFeature, tableFeatures, sortFn_alphanumeric, sortFn_basic, type ColumnDef } from "@tanstack/svelte-table";
   import VerificationStatus from "./VerificationStatus.svelte";
@@ -57,16 +58,16 @@
 
 <div class="mb-2 flex h-7 items-center justify-end">
   {#if table.getAllLeafColumns().some(column => column.getIsSorted())}
-    <button class="rounded px-2 py-1 text-xs text-muted hover:bg-hover hover:text-title focus-visible:outline-2 focus-visible:outline-title/40" onclick={() => table.resetSorting()}>Reset sorting</button>
+    <Button variant="ghost" class="text-muted" onclick={() => table.resetSorting()}>Reset sorting</Button>
   {/if}
 </div>
 <div class="overflow-x-auto rounded border border-border-strong">
   <table class="w-full text-left text-xs" aria-label="Experience records">
     <thead class="bg-surface text-muted"><tr>
       {#each table.getAllLeafColumns() as column (column.id)}<th scope="col" class="whitespace-nowrap border-b border-border-strong" aria-sort={column.getIsSorted() === "desc" ? "descending" : column.getIsSorted() === "asc" ? "ascending" : "none"}>
-        <button class="flex w-full items-center gap-1.5 px-4 py-3 text-left font-medium hover:text-title focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-title/40" onclick={column.getToggleSortingHandler()}>{column.columnDef.header}
+        <Button variant="ghost" class="w-full justify-start gap-1.5 rounded-none px-4 text-left" onclick={column.getToggleSortingHandler()}>{column.columnDef.header}
           {#if column.getIsSorted()}{#if column.getIsSorted() === "desc"}<ArrowDown size={12} aria-hidden="true" />{:else}<ArrowUp size={12} aria-hidden="true" />{/if}{/if}
-        </button>
+        </Button>
       </th>{/each}
     </tr></thead>
     <tbody>

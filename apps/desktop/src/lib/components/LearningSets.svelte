@@ -1,10 +1,20 @@
 <script lang="ts">
+  import { Checkbox } from "$lib/components/ui/checkbox/index.js";
+  import * as Dialog from "$lib/components/ui/dialog/index.js";
+  import { Button } from "$lib/components/ui/button/index.js";
+  import IconButton from "$lib/components/ui/icon-button.svelte";
+  import { Input } from "$lib/components/ui/input/index.js";
+  import { Textarea } from "$lib/components/ui/textarea/index.js";
+  import { NativeSelect } from "$lib/components/ui/native-select/index.js";
   import LayoutDashboard from "@lucide/svelte/icons/layout-dashboard";
   import X from "@lucide/svelte/icons/x";
   import { tick } from "svelte";
   import Layers from "@lucide/svelte/icons/layers";
   import ActionLabel from "./ActionLabel.svelte";
   import { feedback } from "$lib/feedback";
+  import ExperienceNavigation from "./ExperienceNavigation.svelte";
+  import WorkspaceColumn from "./WorkspaceColumn.svelte";
+  import { studio } from "$lib/studio.svelte";
   import StudioSidebar from "./StudioSidebar.svelte";
   import DatasetPreparation from "./DatasetPreparation.svelte";
   import { invoke } from "@tauri-apps/api/core";
@@ -17,15 +27,13 @@
     root: string; experiences: Experience[]; reviews: Record<string, { revisions: Revision[] }>;
     busy?: boolean; dirty?: boolean; blocked?: boolean;
   } = $props();
-  const focusClass = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
-  const buttonClass = "rounded-md border border-border-strong px-3 py-2 text-xs disabled:opacity-45 " + focusClass;
-  const inputClass = "mt-1 block w-full rounded-md border border-border-strong bg-raised p-2.5 text-sm " + focusClass;
+  const inputClass = "mt-1 block w-full";
   let activeOperation = $state("");
   let selectedSet = $state<string | null>(null);
   let sets = $state<LearningSet[]>([]);
   let openTabs = $state<string[]>([]);
   let history: (string | null)[] = [];
-  let discardDialog: HTMLDialogElement;
+  let discardOpen = $state(false);
   const tabs = $derived([{ id: null, label: "Overview" }, ...openTabs.map(id => ({ id, label: id === "draft" ? "New learning set" : sets.find(set => set.id === id)?.name ?? "Learning set" }))]);
   async function selectTab(id: string | null) {
     if (id !== null && !openTabs.includes(id)) openTabs = [...openTabs, id];
@@ -36,7 +44,7 @@
   }
   async function closeTab(id: string) {
     if (busy) return;
-    if (id === "draft" && dirty) { discardDialog.showModal(); return; }
+    if (id === "draft" && dirty) { discardOpen = true; return; }
     openTabs = openTabs.filter(value => value !== id);
     history = history.filter(value => value !== id);
     if (selectedSet === id) {
@@ -49,7 +57,7 @@
   async function discardDraft() {
     discard();
     dirty = false;
-    discardDialog.close();
+    discardOpen = false;
     await closeTab("draft");
   }
   function navigateTabs(event: KeyboardEvent) {
@@ -125,48 +133,50 @@
   }
 </script>
 
-<div class="flex h-full min-h-0 overflow-x-auto">
-<StudioSidebar title="Loop">
-  <div class="px-3 pb-3">
-    <button class="{buttonClass} w-full bg-raised hover:bg-selection" aria-current={selectedSet === "draft" ? "page" : undefined} disabled={busy} onclick={() => selectTab("draft")}>{dirty ? "Continue draft · Unsaved" : "Create learning set"}</button>
+<div class="flex h-full min-h-0 gap-1 overflow-x-auto">
+<StudioSidebar title="Experiences">
+  <ExperienceNavigation {busy} reviewDirty={blocked} loopDirty={dirty} />
+  <div class="shrink-0 p-3">
+    <Button class="w-full" aria-current={selectedSet === "draft" ? "page" : undefined} disabled={busy} onclick={() => selectTab("draft")}>{dirty ? "Continue draft · Unsaved" : "Create learning set"}</Button>
   </div>
-  <div class="flex items-center justify-between px-4 py-2 text-xs text-muted"><span>Learning sets ({sets.length})</span><button class="{buttonClass} bg-raised hover:bg-selection" disabled={busy} onclick={() => work(refresh)}><ActionLabel active={activeOperation === "Loading learning sets"} label="Refresh" pending="Refreshing…" /></button></div>
+  <div class="flex items-center justify-between px-4 py-2 text-xs text-muted"><span>Learning sets ({sets.length})</span><Button disabled={busy} onclick={() => work(refresh)}><ActionLabel active={activeOperation === "Loading learning sets"} label="Refresh" pending="Refreshing…" /></Button></div>
   <div class="min-h-0 flex-1 overflow-y-auto">
     {#each sets as set (set.id)}
-      <button class="w-full px-4 py-3 text-left text-sm hover:bg-hover disabled:opacity-45 {focusClass} {selectedSet === set.id ? 'bg-selection' : 'bg-transparent'}" aria-current={selectedSet === set.id ? "page" : undefined} disabled={busy} onclick={() => selectTab(set.id)}>
+      <Button variant="ghost" class="block h-auto w-full whitespace-normal rounded-none px-4 py-3 text-left {selectedSet === set.id ? 'bg-selection' : 'bg-transparent'}" aria-current={selectedSet === set.id ? "page" : undefined} disabled={busy} onclick={() => selectTab(set.id)}>
         <span class="block truncate">{set.name}</span><span class="mt-1 block text-xs text-muted">{set.members.length} experiences</span>
-      </button>
+      </Button>
     {:else}<p class="px-4 py-3 text-xs text-muted">{loaded ? "No saved learning sets yet." : "Loading learning sets…"}</p>{/each}
   </div>
 </StudioSidebar>
-<div class="flex min-h-0 min-w-80 flex-1 flex-col">
-  <div class="flex shrink-0 items-center border-b border-border bg-surface">
-    <div role="tablist" aria-label="Loop tabs" tabindex="-1" class="flex min-w-0 overflow-x-auto" onkeydown={navigateTabs}>
-      {#each tabs as tab (tab.id)}
-        <div role="presentation" class="flex h-10 max-w-64 shrink-0 items-center border-r border-border {selectedSet === tab.id ? 'bg-background text-title' : 'text-muted hover:bg-hover'}">
-          <button role="tab" id="loop-tab-{tab.id ?? 'overview'}" aria-controls="loop-panel-learning-sets" aria-selected={selectedSet === tab.id} tabindex={selectedSet === tab.id ? 0 : -1} class="flex h-full min-w-0 items-center gap-2 px-4 text-xs focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-title/40" onclick={() => selectTab(tab.id)} title={tab.label}>
+<WorkspaceColumn active={studio.activeView === "loop"}>
+<div class="workbench-panel flex min-h-0 min-w-80 flex-1 flex-col overflow-hidden">
+  <div class="flex h-[35px] shrink-0 items-center bg-[#222222] shadow-[inset_0_-1px_0_var(--color-border)]">
+    <div role="tablist" aria-label="Loop tabs" tabindex={-1} class="flex h-full min-w-0 overflow-x-auto" onkeydown={navigateTabs}>
+      {#each tabs as tab, index (tab.id)}
+        <div role="presentation" class="group/tab flex h-full max-w-64 shrink-0 items-center rounded-tr-lg {index === 0 ? 'rounded-tl-none border-l-0' : '-ml-px rounded-tl-lg'} border border-y-0 {selectedSet === tab.id ? 'relative z-10 border-border bg-background text-title' : 'border-transparent bg-[#222222] text-muted shadow-[inset_0_-1px_0_var(--color-border)] hover:bg-[#292929]'}">
+          <button role="tab" id="loop-tab-{tab.id ?? 'overview'}" aria-controls="loop-panel-learning-sets" aria-selected={selectedSet === tab.id} tabindex={selectedSet === tab.id ? 0 : -1} class="flex h-full min-w-0 items-center gap-2 px-3 text-xs focus-visible:outline-1 focus-visible:outline-ring focus-visible:-outline-offset-2" onclick={() => selectTab(tab.id)} title={tab.label}>
             {#if tab.id === null}<LayoutDashboard size={14} class="shrink-0" aria-hidden="true" />{:else}<Layers size={14} class="shrink-0" aria-hidden="true" />{/if}
             <span class="truncate">{tab.label}</span>
             {#if tab.id === "draft" && dirty}<span aria-label="Unsaved draft" class="h-1.5 w-1.5 shrink-0 rounded-full bg-accent"></span>{/if}
           </button>
-          {#if tab.id !== null}<button class="mr-2 rounded p-1 text-muted hover:bg-hover disabled:opacity-45 {focusClass}" aria-label="Close {tab.label} tab" disabled={busy} onclick={() => closeTab(tab.id!)}><X size={14} aria-hidden="true" /></button>{/if}
+          {#if tab.id !== null}<IconButton class="mr-2 text-muted {selectedSet === tab.id ? '' : 'opacity-0 group-hover/tab:opacity-100 group-focus-within/tab:opacity-100'}" aria-label="Close {tab.label} tab" disabled={busy} onclick={() => closeTab(tab.id!)}><X size={14} aria-hidden="true" /></IconButton>{/if}
         </div>
       {/each}
     </div>
   </div>
-<div id="loop-panel-learning-sets" role="tabpanel" aria-labelledby="loop-tab-{selectedSet ?? 'overview'}" tabindex="0" class="min-h-0 flex-1 overflow-y-auto px-7 py-6" aria-busy={busy}>
+<div id="loop-panel-learning-sets" role="tabpanel" aria-labelledby="loop-tab-{selectedSet ?? 'overview'}" tabindex={0} class="min-h-0 flex-1 overflow-y-auto px-7 py-6" aria-busy={busy}>
   {#if blocked}<p class="mb-4 rounded border border-warning/40 p-3 text-warning">Save or discard your experience review before curating. Your learning-set draft is preserved.</p>{/if}
   {#if selectedSet === null}
     <h2 class="text-xl font-medium">Overview</h2>
     <p class="mt-3 max-w-lg leading-relaxed text-muted">Select useful experiences, preserve their evidence, and prepare training datasets.</p>
     <p class="mt-5 text-sm">{loaded ? `${sets.length} saved learning sets` : "Loading learning sets…"}</p>
     {#if loaded && !sets.length}<p class="mt-2 text-sm text-muted">No learning sets yet. Create your first set from reviewed experiences.</p>{/if}
-    <button class="{buttonClass} mt-4 bg-raised hover:bg-selection" disabled={busy || blocked} onclick={() => selectTab("draft")}>{dirty ? "Continue draft" : "Create learning set"}</button>
+    <Button class="mt-4" disabled={busy || blocked} onclick={() => selectTab("draft")}>{dirty ? "Continue draft" : "Create learning set"}</Button>
     <div class="mt-6 space-y-2">
       {#each sets as set (set.id)}
-        <button class="block w-full rounded border border-border p-4 text-left hover:bg-hover {focusClass}" onclick={() => selectTab(set.id)}>
+        <Button class="block h-auto w-full whitespace-normal p-4 text-left" onclick={() => selectTab(set.id)}>
           <span class="block font-medium">{set.name}</span><span class="mt-1 block text-xs text-muted">{set.members.length} experiences · {set.curator}</span>
-        </button>
+        </Button>
       {/each}
     </div>
   {/if}
@@ -178,19 +188,19 @@
   <form class="mt-5" onsubmit={(e) => { e.preventDefault(); save(); }}>
     <fieldset class="disabled:opacity-50" disabled={busy || blocked}>
       <div class="grid gap-4 md:grid-cols-2">
-        <label>Learning set name<input class={inputClass} bind:value={name} required maxlength="200" placeholder="Recover from grasp slips" /></label>
-        <label>Curator<input class={inputClass} bind:value={curator} required maxlength="200" placeholder="Your name" /></label>
-        <label class="md:col-span-2">Learning goal<textarea class={inputClass} bind:value={goal} required maxlength="4000" rows="2" placeholder="What should the robot learn from these attempts?"></textarea></label>
+        <label>Learning set name<Input class={inputClass} bind:value={name} required maxlength={200} placeholder="Recover from grasp slips" /></label>
+        <label>Curator<Input class={inputClass} bind:value={curator} required maxlength={200} placeholder="Your name" /></label>
+        <label class="md:col-span-2">Learning goal<Textarea class={inputClass} bind:value={goal} required maxlength={4000} rows={2} placeholder="What should the robot learn from these attempts?"></Textarea></label>
       </div>
       <div class="my-5 flex flex-wrap items-end gap-3">
-        <label class="flex-1">Find reviewed experiences<input class={inputClass} bind:value={query} placeholder="Search task, robot, or ID" /></label>
-        <label>Evidence filter<select class={inputClass} bind:value={filter}><option value="all">All reviewed</option><option value="success">Success</option><option value="assisted">Human assisted</option><option value="failure">Failure</option><option value="timeout">Timeout</option><option value="aborted">Aborted</option><option value="unknown">Unknown outcome</option></select></label>
+        <label class="flex-1">Find reviewed experiences<Input class={inputClass} bind:value={query} placeholder="Search task, robot, or ID" /></label>
+        <label>Evidence filter<NativeSelect class={inputClass} bind:value={filter}><option value="all">All reviewed</option><option value="success">Success</option><option value="assisted">Human assisted</option><option value="failure">Failure</option><option value="timeout">Timeout</option><option value="aborted">Aborted</option><option value="unknown">Unknown outcome</option></NativeSelect></label>
         <span class="pb-2 text-xs text-muted">{candidates.length} matching · {selectionIds.length} selected</span>
       </div>
       <div class="max-h-72 overflow-y-auto rounded border border-border-strong">
         {#each candidates as experience (experience.id)}
           <label class="flex items-start gap-3 border-b border-border p-3">
-            <input class="mt-1 accent-accent {focusClass}" type="checkbox" checked={!!selected[experience.id]} onchange={() => toggle(experience.id)} />
+            <Checkbox class="mt-1" checked={!!selected[experience.id]} onCheckedChange={() => toggle(experience.id)} aria-label={`Include ${experience.task}`} />
             <span class="min-w-0"><span class="block">{experience.task} · {experience.robot}</span><span class="block break-all text-xs text-muted">{experience.id} · {latest(experience.id)?.review.outcome} · Assistance: {latest(experience.id)?.review.assistance}</span><span class="block whitespace-pre-wrap text-xs text-muted">{latest(experience.id)?.review.notes}</span></span>
           </label>
         {:else}<p class="p-4 text-muted">No reviewed experiences match. Review attempts in Experiences first, or change the filter.</p>{/each}
@@ -200,12 +210,12 @@
         <p class="mt-1 text-xs text-muted">Selections remain when filters change. Include only evidence relevant to your goal.</p>
         {#each selectionIds as id (id)}
           <div class="mt-3 rounded border border-border-strong p-3">
-            <div class="mb-2 flex items-center justify-between gap-3"><span class="break-all text-xs">{id} · review revision {selected[id].review_revision}</span><button class="{buttonClass} bg-raised hover:bg-selection" type="button" onclick={() => toggle(id)}>Remove</button></div>
-            <label>Why include this attempt?<textarea class={inputClass} bind:value={selected[id].reason} required maxlength="4000" rows="2" placeholder="Useful example, failure evidence, or recovery worth studying"></textarea></label>
+            <div class="mb-2 flex items-center justify-between gap-3"><span class="break-all text-xs">{id} · review revision {selected[id].review_revision}</span><Button type="button" onclick={() => toggle(id)}>Remove</Button></div>
+            <label>Why include this attempt?<Textarea class={inputClass} bind:value={selected[id].reason} required maxlength={4000} rows={2} placeholder="Useful example, failure evidence, or recovery worth studying"></Textarea></label>
           </div>
         {/each}
       {/if}
-      <div class="mt-4 flex gap-3"><button class="{buttonClass} bg-accent font-semibold text-white hover:bg-accent-hover" type="submit" disabled={!selectionIds.length}><ActionLabel active={activeOperation === "Saving learning set"} label="Save learning set" pending="Saving…" /></button>{#if dirty}<button class="{buttonClass} bg-raised hover:bg-selection" type="button" onclick={discard}>Discard selection</button>{/if}</div>
+      <div class="mt-4 flex gap-3"><Button variant="default" type="submit" disabled={!selectionIds.length}><ActionLabel active={activeOperation === "Saving learning set"} label="Save learning set" pending="Saving…" /></Button>{#if dirty}<Button type="button" onclick={discard}>Discard selection</Button>{/if}</div>
     </fieldset>
   </form>
   <p class="mt-4 text-xs text-muted">Saved sets preserve whole-attempt selections and review snapshots. Use dataset preparation to validate supported imitation examples. Correction segments are not yet supported.</p>
@@ -218,9 +228,9 @@
       <p class="mt-2 text-xs text-muted">{set.curator} · {new Date(set.created_at_unix_ms).toLocaleString()} · Saved selection</p>
       {#each set.members as member}<div class="mt-3 border-t border-border pt-3"><p class="break-all text-xs">{member.experience_id} · {member.review.review.outcome} · review revision {member.review.revision}</p><p class="mt-1 whitespace-pre-wrap text-muted">{member.reason}</p></div>{/each}
       <div class="mt-4 flex flex-wrap gap-3">
-        <button class="{buttonClass} bg-raised hover:bg-selection" disabled={busy || blocked} onclick={() => preparingSet = preparingSet === set.id ? "" : set.id}>Prepare training dataset</button>
-        <button class="{buttonClass} bg-accent font-semibold text-white hover:bg-accent-hover" disabled={busy || blocked} onclick={() => exportSet(set.id, true)}><ActionLabel active={activeOperation === "Exporting learning-set files"} label="Export experience files" pending="Exporting…" /></button>
-        <button class="{buttonClass} bg-raised hover:bg-selection" disabled={busy || blocked} onclick={() => exportSet(set.id)}><ActionLabel active={activeOperation === "Exporting selection manifest"} label="Export selection manifest only" pending="Exporting…" /></button>
+        <Button disabled={busy || blocked} onclick={() => preparingSet = preparingSet === set.id ? "" : set.id}>Prepare training dataset</Button>
+        <Button variant="default" disabled={busy || blocked} onclick={() => exportSet(set.id, true)}><ActionLabel active={activeOperation === "Exporting learning-set files"} label="Export experience files" pending="Exporting…" /></Button>
+        <Button disabled={busy || blocked} onclick={() => exportSet(set.id)}><ActionLabel active={activeOperation === "Exporting selection manifest"} label="Export selection manifest only" pending="Exporting…" /></Button>
       </div>
       {#if preparingSet === set.id}<fieldset disabled={blocked}><DatasetPreparation {root} {set} bind:busy /></fieldset>{/if}
       <p class="mt-2 text-xs text-muted">Experience export includes original files and review history. Shared video/data chunks remain whole; dataset preparation is still required before training.</p>
@@ -228,13 +238,18 @@
   {/each}
 </div>
 </div>
+</WorkspaceColumn>
 </div>
 
-<dialog bind:this={discardDialog} aria-labelledby="discard-learning-set-title" class="m-auto max-w-md rounded-xl border border-border-strong bg-background p-6 text-foreground shadow-xl backdrop:bg-black/60" onclose={() => document.getElementById(`loop-tab-${selectedSet ?? "overview"}`)?.focus()}>
-  <h2 id="discard-learning-set-title" class="text-lg font-medium">Discard this draft?</h2>
-  <p class="mt-3 text-sm text-muted">The learning set details and experience selections have not been saved.</p>
+<Dialog.Root bind:open={discardOpen}>
+{#if discardOpen}
+<Dialog.Content showCloseButton={false} onCloseAutoFocus={(event) => { event.preventDefault(); document.getElementById(`loop-tab-${selectedSet ?? "overview"}`)?.focus(); }}>
+  <Dialog.Title>Discard this draft?</Dialog.Title>
+  <Dialog.Description class="mt-3">The learning set details and experience selections have not been saved.</Dialog.Description>
   <div class="mt-5 flex justify-end gap-3">
-    <button class="{buttonClass} bg-raised" onclick={() => discardDialog.close()}>Keep editing</button>
-    <button class="{buttonClass} bg-raised text-error" onclick={discardDraft}>Discard draft</button>
+    <Button onclick={() => discardOpen = false}>Keep editing</Button>
+    <Button variant="destructive" onclick={discardDraft}>Discard draft</Button>
   </div>
-</dialog>
+</Dialog.Content>
+{/if}
+</Dialog.Root>

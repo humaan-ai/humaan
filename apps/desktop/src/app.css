@@ -1,16 +1,32 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@custom-variant dark (&:is(.dark *));
 
-/* Cursor Dark surfaces and text hierarchy. */
+/* VS Code modern dark workbench surfaces. */
 @theme {
-  --color-background: #1a1a1a; /* editor.background */
-  --color-surface: #141414; /* sideBar / titleBar / statusBar */
-  --color-raised: #202020; /* input / dropdown background */
-  --color-border: #ffffff0d; /* sideBar / statusBar / panel borders */
-  --color-border-strong: #2a2a2a; /* input / dropdown / widget borders */
+  --color-primary: #4c9df3;
+  --color-primary-foreground: #101820;
+  --color-secondary: #252526;
+  --color-secondary-foreground: #f0f0f0;
+  --color-muted-foreground: #9d9d9d;
+  --color-popover: #1f1f1f;
+  --color-popover-foreground: #f0f0f0bd;
+  --color-input: #313131;
+  --color-ring: #4c9df3;
+  --color-destructive: #bf616a;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --color-background: #1f1f1f; /* editor.background */
+  --color-surface: #181818; /* sideBar / titleBar / statusBar */
+  --color-raised: #252526; /* input / dropdown background */
+  --color-border: #ffffff12; /* sideBar / statusBar / panel borders */
+  --color-border-strong: #313131; /* input / dropdown / widget borders */
 
   --color-title: #f0f0f0;
   --color-foreground: #f0f0f0bd;
-  --color-muted: #f0f0f0bd;
+  --color-muted: #9d9d9d;
 
   --color-accent: #4c9df3; /* buttons, focus ring, badges, links */
   --color-accent-hover: #66aefa;
@@ -23,7 +39,7 @@
   --color-warning: #ebcb8b; /* Nord yellow */
   --color-success: #a3be8c; /* Nord green */
 
-  --font-sans: Inter, Avenir, Helvetica, Arial, ui-sans-serif, system-ui,
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, ui-sans-serif, system-ui,
     sans-serif;
   --font-mono: "SF Mono", Monaco, Menlo, Consolas, ui-monospace, monospace;
 }
@@ -74,5 +90,13 @@
   input[type="checkbox"],
   input[type="range"] {
     cursor: pointer;
+  }
+}
+
+@layer components {
+  .workbench-panel {
+    border: 1px solid var(--color-border-strong);
+    border-radius: 10px;
+    background: var(--color-background);
   }
 }

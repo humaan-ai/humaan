@@ -1,4 +1,7 @@
 mod experiences;
+mod builder;
+mod simulation;
+mod project_browser;
 
 use tauri::{
     menu::{Menu, MenuItem, MenuItemKind, Submenu},
@@ -74,6 +77,20 @@ pub fn run() {
             experiences::learning_set_prepare,
             experiences::dataset_tools_status,
             experiences::dataset_tools_install,
+            simulation::simulation_tools_status,
+            simulation::simulation_tools_install,
+            simulation::simulation_list,
+            simulation::simulation_load,
+            simulation::simulation_delete,
+            simulation::simulation_run,
+            builder::builder_list,
+            builder::builder_load,
+            builder::builder_save,
+            builder::builder_delete_version,
+            project_browser::project_entries,
+            project_browser::project_create_entry,
+            project_browser::project_read_file,
+            project_browser::project_save_file,
             select_directory
         ])
         .run(tauri::generate_context!())

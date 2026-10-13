@@ -1,6 +1,7 @@
 //! Offline operations on versioned recording directories.
 pub mod annotations;
 pub mod dataset_environment;
+pub mod simulation_environment;
 pub mod dataset_preparation;
 pub mod learning_sets;
 mod lerobot;

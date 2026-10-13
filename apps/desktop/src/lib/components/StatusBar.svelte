@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { Button, buttonVariants } from "$lib/components/ui/button/index.js";
+  import IconButton from "$lib/components/ui/icon-button.svelte";
   import FolderOpen from "@lucide/svelte/icons/folder-open";
   import Bell from "@lucide/svelte/icons/bell";
   import LoaderCircle from "@lucide/svelte/icons/loader-circle";
@@ -8,12 +10,12 @@
   import { feedback, dismissAfterReading } from "$lib/feedback";
   import NoticeCard from "./NoticeCard.svelte";
   let now = $state(Date.now());
-  let bell: HTMLButtonElement;
+  let bell = $state<HTMLButtonElement | null>(null);
   let panel = $state<HTMLElement>();
   const current = $derived($feedback.activities.at(-1));
   const unread = $derived($feedback.notices.filter(n => n.unread).length);
   const popups = $derived($feedback.notices.filter(n => n.popup).slice(0, 3));
-  const buttonClass = "rounded px-2 py-0.5 hover:bg-hover focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent";
+  const buttonClass = buttonVariants({ variant: "ghost", size: "xs", class: "h-5" });
   onMount(() => { const timer = setInterval(() => now = Date.now(), 1000); return () => clearInterval(timer); });
   async function toggleHistory() {
     if ($feedback.panelOpen) { closeHistory(); return; }
@@ -29,7 +31,7 @@
 
 {#if $feedback.panelOpen}
   <section bind:this={panel} aria-label="Notifications" class="fixed right-3 bottom-9 z-50 flex max-h-[70vh] w-[calc(100%_-_1.5rem)] max-w-md flex-col rounded-xl border border-border-strong bg-surface text-foreground shadow-2xl">
-    <header class="flex items-center justify-between border-b border-border px-4 py-3 text-sm"><h2 class="font-medium">Notifications</h2><div class="flex gap-2"><button class={buttonClass} disabled={!$feedback.notices.length} onclick={() => feedback.clearHistory()}>Clear history</button><button class={buttonClass} aria-label="Close notifications" onclick={closeHistory}><X size={16} /></button></div></header>
+    <header class="flex items-center justify-between border-b border-border px-4 py-3 text-sm"><h2 class="font-medium">Notifications</h2><div class="flex gap-2"><Button variant="ghost" size="xs" class={buttonClass} disabled={!$feedback.notices.length} onclick={() => feedback.clearHistory()}>Clear history</Button><IconButton class={buttonClass} aria-label="Close notifications" onclick={closeHistory}><X size={16} /></IconButton></div></header>
     <div class="min-h-0 space-y-3 overflow-y-auto p-3">
       {#each $feedback.activities as activity (activity.id)}
         <div class="rounded-lg border border-border-strong p-3 text-sm"><p class="flex items-center gap-2"><LoaderCircle size={14} class="animate-spin motion-reduce:animate-none" />{activity.title}</p><p class="mt-2 text-xs text-muted">{Math.max(0, Math.floor((now - activity.startedAt) / 1000))}s elapsed</p>{#if activity.detail}<p class="mt-2 whitespace-pre-wrap break-words text-xs text-muted">{activity.detail}</p>{/if}</div>
@@ -45,13 +47,13 @@
   </div>
 {/if}
 
-<footer class="flex h-[22px] shrink-0 items-center gap-2 border-t border-border bg-surface px-2 text-[11px] text-foreground">
+<footer class="flex h-[22px] shrink-0 items-center gap-2 bg-surface px-2 text-[11px] text-foreground">
   <span class="flex min-w-0 max-w-[35%] shrink-0 items-center gap-1.5" title={studio.project?.root}>
     {#if studio.project}<FolderOpen size={12} class="shrink-0" aria-hidden="true" /><span class="truncate">{studio.project.project.name}</span>{:else}<span>No project open</span>{/if}
   </span>
   <div class="min-w-0 flex-1">
     {#if current}
-      <button class="{buttonClass} flex max-w-full items-center gap-1.5" aria-label="Show operation details" onclick={toggleHistory}><LoaderCircle size={12} class="shrink-0 animate-spin motion-reduce:animate-none" aria-hidden="true" /><span class="truncate">{current.title}</span><span class="shrink-0 text-muted">{Math.max(0, Math.floor((now - current.startedAt) / 1000))}s</span>{#if $feedback.activities.length > 1}<span>+{$feedback.activities.length - 1}</span>{/if}</button>
+      <Button variant="ghost" size="xs" class="{buttonClass} flex max-w-full items-center gap-1.5" aria-label="Show operation details" onclick={toggleHistory}><LoaderCircle size={12} class="shrink-0 animate-spin motion-reduce:animate-none" aria-hidden="true" /><span class="truncate">{current.title}</span><span class="shrink-0 text-muted">{Math.max(0, Math.floor((now - current.startedAt) / 1000))}s</span>{#if $feedback.activities.length > 1}<span>+{$feedback.activities.length - 1}</span>{/if}</Button>
     {:else if $feedback.status}
       {#key $feedback.status.id}
         {@const status = $feedback.status}
@@ -60,5 +62,5 @@
     {/if}
   </div>
   <span class="hidden shrink-0 text-muted sm:inline">Local</span>
-  <button bind:this={bell} class="{buttonClass} flex shrink-0 items-center gap-1" aria-label={unread ? `Notifications (${unread} unread)` : "Notifications"} aria-expanded={$feedback.panelOpen} title="Notifications" onclick={toggleHistory}><Bell size={12} aria-hidden="true" />{#if unread}<span class={$feedback.notices.some(n => n.unread && n.kind === 'error') ? 'text-error' : 'text-muted'}>{unread}</span>{/if}</button>
+  <Button variant="ghost" size="xs" bind:ref={bell} class="{buttonClass} flex shrink-0 items-center gap-1" aria-label={unread ? `Notifications (${unread} unread)` : "Notifications"} aria-expanded={$feedback.panelOpen} title="Notifications" onclick={toggleHistory}><Bell size={12} aria-hidden="true" />{#if unread}<span class={$feedback.notices.some(n => n.unread && n.kind === 'error') ? 'text-error' : 'text-muted'}>{unread}</span>{/if}</Button>
 </footer>

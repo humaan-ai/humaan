@@ -1,31 +1,46 @@
 <script lang="ts">
-  import { studio } from "$lib/studio.svelte";
+  import { Button } from "$lib/components/ui/button/index.js";
+  import IconButton from "$lib/components/ui/icon-button.svelte";
+  import { studio, type StudioView } from "$lib/studio.svelte";
   import Layers from "@lucide/svelte/icons/layers";
-  import Workflow from "@lucide/svelte/icons/workflow";
+  import Folder from "@lucide/svelte/icons/folder";
+  import Box from "@lucide/svelte/icons/box";
+  import Play from "@lucide/svelte/icons/play";
+  import Radio from "@lucide/svelte/icons/radio";
+  import Server from "@lucide/svelte/icons/server";
   import Settings from "@lucide/svelte/icons/settings";
-  let { busy, reviewDirty, loopDirty, settingsActive, onsettings, onview }: { busy: boolean; reviewDirty: boolean; loopDirty: boolean; settingsActive: boolean; onsettings: () => void; onview: (view: "experiences" | "loop") => void } = $props();
+  let { busy, reviewDirty, loopDirty, settingsActive, onsettings, onview }: { busy: boolean; reviewDirty: boolean; loopDirty: boolean; settingsActive: boolean; onsettings: () => void; onview: (view: StudioView) => void } = $props();
   const items = [
+    { id: "project", label: "Project", icon: Folder },
+    { id: "builder", label: "Builder", icon: Box },
+    { id: "simulation", label: "Simulation", icon: Play },
     { id: "experiences", label: "Experiences", icon: Layers },
-    { id: "loop", label: "Loop", icon: Workflow },
+    { id: "deployments", label: "Deployments", icon: Radio },
   ] as const;
 </script>
 
-<nav aria-label="Studio views" class="flex w-12 shrink-0 flex-col border-r border-border bg-surface">
+<nav aria-label="Studio views" class="flex w-10 shrink-0 flex-col gap-1 pb-1 bg-surface">
   {#each items as item}
-    {@const dirty = item.id === "experiences" ? reviewDirty : item.id === "loop" ? loopDirty : false}
-    <button
-      class="relative flex h-12 w-12 shrink-0 items-center justify-center border-l-2 transition-colors hover:bg-hover focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent disabled:opacity-45 {studio.activeView === item.id ? 'border-accent text-foreground' : 'border-transparent text-muted hover:text-foreground'}"
+    {@const dirty = item.id === "builder" ? studio.builderDirty : item.id === "experiences" && (reviewDirty || loopDirty)}
+    {@const active = studio.activeView === item.id || (item.id === "experiences" && studio.activeView === "loop")}
+    <Button variant="ghost" size="icon-lg"
+      class="relative flex h-10 w-10 shrink-0 items-center justify-center transition-colors {active ? 'bg-selection text-foreground' : 'text-muted hover:text-foreground'}"
       aria-label={item.label + (dirty ? " (unsaved draft)" : "")}
-      aria-current={studio.activeView === item.id ? "page" : undefined}
+      aria-current={active ? "page" : undefined}
       title={item.label + (dirty ? " · Unsaved draft" : "")}
       disabled={busy}
       onclick={() => onview(item.id)}
     >
-      <item.icon size={22} strokeWidth={1.5} aria-hidden="true" />
+      <item.icon size={20} strokeWidth={1.5} aria-hidden="true" />
       {#if dirty}<span class="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-accent"></span>{/if}
-    </button>
+    </Button>
   {/each}
-  <button id="studio-settings-trigger" class="mt-auto flex h-12 w-12 shrink-0 items-center justify-center border-l-2 hover:bg-hover focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent disabled:opacity-45 {settingsActive ? 'border-accent text-foreground' : 'border-transparent text-muted hover:text-foreground'}" aria-label="Settings" aria-haspopup="dialog" aria-expanded={settingsActive} aria-controls="studio-settings-dialog" title="Settings" disabled={busy} onclick={onsettings}>
-    <Settings size={22} strokeWidth={1.5} aria-hidden="true" />
-  </button>
+  <div class="mt-auto flex flex-col gap-1">
+  <IconButton size="icon-lg" class={studio.activeView === "cloud" ? "bg-selection text-foreground" : "text-muted"} aria-label="Cloud resources" title="Cloud resources" aria-current={studio.activeView === "cloud" ? "page" : undefined} disabled={busy} onclick={() => onview("cloud")}>
+    <Server size={20} strokeWidth={1.5} aria-hidden="true" />
+  </IconButton>
+  <IconButton size="icon-lg" id="studio-settings-trigger" class="flex   shrink-0 items-center justify-center {settingsActive ? 'bg-selection text-foreground' : 'text-muted hover:text-foreground'}" aria-label="Settings" aria-haspopup="dialog" aria-expanded={settingsActive} aria-controls="studio-settings-dialog" title="Settings" disabled={busy} onclick={onsettings}>
+    <Settings size={20} strokeWidth={1.5} aria-hidden="true" />
+  </IconButton>
+  </div>
 </nav>

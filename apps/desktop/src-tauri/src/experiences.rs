@@ -32,7 +32,7 @@ pub async fn experience_project(
     blocking(move || {
         let path = path.trim();
         if path.is_empty() { return Err("Enter a project location.".into()); }
-        let location = if path == "~" || path.starts_with("~/") || path.starts_with("~\\") {
+        let mut location = if path == "~" || path.starts_with("~/") || path.starts_with("~\\") {
             let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
                 .ok_or("Could not find your home folder. Enter an absolute project location.")?;
             PathBuf::from(home).join(if path == "~" { "" } else { &path[2..] })
@@ -41,10 +41,22 @@ pub async fn experience_project(
         };
         if !location.is_absolute() { return Err("Enter an absolute project location or a path starting with ~/ .".into()); }
         if let Some(ref name) = name {
-            if name.trim().is_empty() || name.chars().any(char::is_control) {
-                return Err("Enter a project name without control characters.".into());
+            let folder_name = name.trim();
+            let stem = folder_name.split('.').next().unwrap_or("").to_ascii_uppercase();
+            let reserved = matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+                || (stem.len() == 4 && (stem.starts_with("COM") || stem.starts_with("LPT"))
+                    && matches!(stem.as_bytes()[3], b'1'..=b'9'));
+            if folder_name.is_empty() || folder_name.starts_with('.') || folder_name.ends_with('.')
+                || folder_name.chars().any(|c| c.is_control() || "<>:\"/\\|?*".contains(c)) || reserved {
+                return Err("Enter a valid project folder name without path separators, reserved characters, or a leading or trailing dot.".into());
             }
-            std::fs::create_dir_all(&location).map_err(|e| format!("Could not create project folder: {e}"))?;
+            std::fs::create_dir_all(&location).map_err(|e| format!("Could not create project location: {e}"))?;
+            location = location.join(folder_name);
+            std::fs::create_dir(&location).map_err(|e| {
+                if e.kind() == std::io::ErrorKind::AlreadyExists {
+                    "A folder with this project name already exists. Choose another name or open the existing project.".to_string()
+                } else { format!("Could not create project folder: {e}") }
+            })?;
         }
         let root = location.canonicalize().map_err(|e| e.to_string())?;
         if !root.is_dir() { return Err("Select a project directory.".into()); }
@@ -273,6 +285,29 @@ mod tests {
                     restored.records[0].verification.as_ref().unwrap().status,
                     "verified"
                 );
+            }
+        });
+    }
+
+    #[test]
+    fn desktop_creation_uses_named_folder_in_selected_location() {
+        tauri::async_runtime::block_on(async {
+            let temp = tempfile::tempdir().unwrap();
+            let parent = temp.path().join("chosen location");
+            let location = parent.to_string_lossy().into_owned();
+            let project = experience_project(location.clone(), Some(" Pick and place ".into())).await.unwrap();
+            assert_eq!(project.root, parent.join("Pick and place").canonicalize().unwrap());
+            assert_eq!(project.project.name, "Pick and place");
+            assert!(project.root.join(".humaan/project.json").is_file());
+            assert!(!parent.join(".humaan").exists());
+            let reopened = experience_project(project.root.to_string_lossy().into_owned(), None).await.unwrap();
+            assert_eq!(reopened.project.id, project.project.id);
+            assert!(experience_project(location.clone(), Some("Pick and place".into())).await.is_err());
+            std::fs::create_dir(parent.join("Existing folder")).unwrap();
+            assert!(experience_project(location.clone(), Some("Existing folder".into())).await.is_err());
+            assert!(!parent.join("Existing folder/.humaan").exists());
+            for name in ["", "..", "../escape", "a/b", "a\\b", ".hidden", "CON", "COM1", "name."] {
+                assert!(experience_project(location.clone(), Some(name.into())).await.is_err(), "accepted {name}");
             }
         });
     }

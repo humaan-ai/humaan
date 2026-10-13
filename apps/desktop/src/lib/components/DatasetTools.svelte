@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Button } from "$lib/components/ui/button/index.js";
   import ActionLabel from "./ActionLabel.svelte";
   import { feedback } from "$lib/feedback";
   import { onMount } from "svelte";
@@ -12,7 +13,6 @@
   let checking = $state(false);
   let error = $state("");
   let alive = true;
-  const buttonClass = "rounded-md border border-border-strong bg-raised px-3 py-2 text-xs hover:bg-selection focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-45";
   async function refresh() {
     if (checking) return;
     checking = true;
@@ -45,8 +45,8 @@
   {#if !tools?.ready}<p class="mt-2 max-w-xl text-xs leading-relaxed text-muted">One-time setup downloads the tools needed to prepare datasets. It may take several minutes and substantial disk space. After setup, preparation works offline.</p>{/if}
   {#if tools?.custom}<p class="mt-2 text-xs text-muted">Using a custom dataset environment. Manage its installation outside Studio.</p>{/if}
   <div class="mt-3 flex flex-wrap gap-2">
-    {#if tools && !tools.custom}<button type="button" class={buttonClass} disabled={busy || tools.installing} onclick={install}><ActionLabel active={installing || tools.installing} label={tools.ready ? "Repair dataset tools" : "Set up dataset tools"} pending="Setting up…" /></button>{/if}
-    <button type="button" class={buttonClass} disabled={busy || checking} onclick={refresh}><ActionLabel active={checking} label="Refresh tool status" pending="Checking…" /></button>
+    {#if tools && !tools.custom}<Button type="button" disabled={busy || tools.installing} onclick={install}><ActionLabel active={installing || tools.installing} label={tools.ready ? "Repair dataset tools" : "Set up dataset tools"} pending="Setting up…" /></Button>{/if}
+    <Button type="button" disabled={busy || checking} onclick={refresh}><ActionLabel active={checking} label="Refresh tool status" pending="Checking…" /></Button>
   </div>
   {#if error || tools?.error}<p class="mt-3 whitespace-pre-wrap break-words text-xs text-error" role="alert">{error || tools?.error}</p>{/if}
 </section>

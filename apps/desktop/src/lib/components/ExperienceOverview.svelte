@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Button } from "$lib/components/ui/button/index.js";
   import ExperienceStatus from "./ExperienceStatus.svelte";
   let { name, experiences, reviews, loaded, onrecords }: {
     name: string; experiences: { id: string; robot: string; task: string }[];
@@ -10,7 +11,6 @@
     const revision = reviews[e.id]?.revisions.at(-1);
     return revision ? [{ ...e, revision }] : [];
   }).sort((a, b) => b.revision.saved_at_unix_ms - a.revision.saved_at_unix_ms).slice(0, 5));
-  const buttonClass = "rounded border border-border-strong bg-raised px-3 py-2 text-xs hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent";
 </script>
 
 <div class="mx-auto w-full max-w-5xl p-7">
@@ -27,7 +27,7 @@
       <h2 class="font-medium">Review progress</h2>
       <progress class="mt-3 h-2 w-full accent-accent" aria-label="Reviewed records" value={reviewed} max={Math.max(1, experiences.length)}></progress>
       <p class="mt-2 text-xs text-muted">{reviewed} of {experiences.length} reviewed</p>
-      {#if experiences.length > reviewed}<button class="{buttonClass} mt-4" onclick={() => onrecords("unreviewed")}>Review remaining records</button>{/if}
+      {#if experiences.length > reviewed}<Button class="mt-4" onclick={() => onrecords("unreviewed")}>Review remaining records</Button>{/if}
       {#if !experiences.length}<p class="mt-3 text-sm text-muted">Import recordings from the Records tab to get started.</p>{/if}
     </section>
     <section class="mt-6" aria-label="Outcome breakdown"><h2 class="font-medium">Final outcomes</h2><div class="mt-3 grid gap-3 sm:grid-cols-3">
@@ -40,5 +40,5 @@
       {:else}<p class="mt-3 text-sm text-muted">No reviews yet.</p>{/each}
     </section>
   {/if}
-  <button class="{buttonClass} mt-6" onclick={() => onrecords("all")}>Browse records</button>
+  <Button class="mt-6" onclick={() => onrecords("all")}>Browse records</Button>
 </div>

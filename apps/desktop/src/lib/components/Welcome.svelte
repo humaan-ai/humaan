@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Button } from "$lib/components/ui/button/index.js";
   import FolderOpen from "@lucide/svelte/icons/folder-open";
   import FolderPlus from "@lucide/svelte/icons/folder-plus";
 
@@ -12,11 +13,10 @@
     oncreate: () => void;
   } = $props();
 
-  const actionClass =
-    "flex min-h-[64px] w-full flex-col items-start justify-center gap-1 rounded-lg bg-[#242424] px-5 py-4 text-left text-xs font-medium leading-6 text-white transition-colors enabled:hover:bg-[#2c2c2c] enabled:active:bg-selection focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-default disabled:opacity-45";
+  const actionClass = "h-auto min-h-16 w-full flex-col items-start gap-1 px-5 py-4 text-left";
 </script>
 
-<div class="flex flex-1 items-center justify-center px-6 py-12">
+<div class="flex min-h-full items-center justify-center px-6 py-12">
   <div class="w-full max-w-lg">
     <div class="flex flex-col items-center text-center">
       <h1 class="m-0">
@@ -34,7 +34,7 @@
       </p>
     </div>
     <div class="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2">
-      <button
+      <Button
         class={actionClass}
         disabled={busy}
         aria-haspopup="dialog"
@@ -42,11 +42,11 @@
       >
         <FolderPlus size={18} strokeWidth={1.5} aria-hidden="true" />
         <span>Create new</span>
-      </button>
-      <button class={actionClass} disabled={busy} onclick={onopen}>
+      </Button>
+      <Button class={actionClass} disabled={busy} onclick={onopen}>
         <FolderOpen size={18} strokeWidth={1.5} aria-hidden="true" />
         <span>Open project</span>
-      </button>
+      </Button>
     </div>
   </div>
 </div>

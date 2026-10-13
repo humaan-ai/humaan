@@ -22,8 +22,10 @@ Tauri's native process (`bun run tauri dev`).
 
 ## Studio navigation
 
-After opening a project, the left activity bar switches between **Experiences**
-and **Loop**. The Settings icon opens a modal dialog with General, Tools, and About sections. The welcome screen stays free of project navigation.
+After opening a project, the left activity bar provides **Project**, **Builder**,
+**Simulation**, **Experiences**, and **Deployments**, with **Cloud resources** at the bottom.
+Experiences and Loops use vertical navigation inside the Experiences panel.
+Project, Simulation, Deployments, and Cloud resources currently have empty workspaces. The Settings icon opens a modal dialog with General, Tools, and About sections. The welcome screen stays free of project navigation.
 Each view has a contextual sidebar, initially 260px wide. Drag its divider, or
 focus the divider and use Left/Right arrows (Home/End for the limits), to resize it.
 The activity bar is 48px wide and the footer retains the current project name.
@@ -77,9 +79,11 @@ navigation to preserve operation ordering.
 
 1. The welcome screen shows **Humaan Studio** with **Open Project** and **Create New**.
    Open a folder initialized by `humaan project init`, or choose **Create New**,
-   enter a project name, optionally use the folder icon to choose a destination,
-   and click **Create new project**. The default is `~/Humaan`; the selected folder
-   itself becomes the project root and missing folders are created automatically.
+   enter a project name or full project path, optionally use the inline folder icon to choose a parent location,
+   and click **Create new project**. The default location is `~/Humaan`. A new folder
+   named after the project is created inside the selected location, with internal
+   data under `<location>/<project name>/.humaan`. The dialog previews this destination.
+   Existing folders are never reused during creation; open them or choose another name.
    **File → New Project…** (**Cmd+Shift+N** / **Ctrl+Shift+N**) opens the same dialog.
 2. Choose **Import recordings** and select a Humaan recording or a complete LeRobot
    v3.0 dataset. Imports use the same validation and duplicate protection as the CLI.
@@ -206,6 +210,53 @@ for supported platforms/inputs, custom environments, and the standalone bundle c
 Output includes a preparation report with exclusions and source mapping. No model
 training is launched. Assisted trajectories and correction segments are unsupported.
 
+## Builder
+
+Open a project and select **Builder**. Add box, cylinder, or sphere modules, or use
+**Import URDF** to select a description and its mesh files together. **Import robot
+folder** supports directory layouts and lets you choose a URDF when several exist.
+Supported meshes are STL and OBJ; package and relative mesh references are resolved
+against the selected files. Missing or ambiguous meshes fail the import without
+replacing the current assembly. Imports are limited to 64 MB of selected robot files.
+
+Select a link in the tree or 3D viewport to configure mass, center of mass, inertia,
+visual/collision geometry, mounting frames, sensors, and its incoming joint. Positions
+use metres and rotations use radians. Attach a library module by choosing the parent
+link and the mounting point on each side; mounting-frame rotations are included in
+the resulting joint transform. Mounts define placement at attachment time; edit the
+joint origin to reposition an existing connection. Save any complete assembly as a
+reusable module, then attach independent copies elsewhere.
+
+**Save version** writes a new immutable snapshot, including embedded meshes, under
+`.humaan/builder/versions`. **Save assembly as module** writes to
+`.humaan/builder/modules`; it does not mark the working robot as saved. Snapshots
+are limited to 100 MB and are written atomically without replacing older versions.
+The latest version opens with the project; choose another from **Saved versions**.
+Switching workspaces preserves the draft. Replacing the robot requires confirmation
+when changes are unsaved, and opening another project is blocked until they are saved
+or discarded through **New** or loading a saved version.
+
+The viewport supports orbit, zoom, pan, picking, fit-to-view, and collision geometry.
+**Test** checks assembly structure and previews joint motion; it is not a physics
+simulation. Fixed, revolute, continuous, and prismatic joints are supported. Xacro
+must be expanded first; mimic, planar, and floating joints are not yet supported.
+OBJ materials/textures are not imported. The original URDF is retained in imported
+snapshots, but Gazebo/transmission/ros2_control extensions are not mapped into runtime
+behavior. Configure sensors and hardware mappings explicitly. AI Chat is available;
+AI-generated Builder edits still require provider integration.
+
+Builder checks:
+
+```sh
+bun run test:builder
+bunx playwright install chromium
+bun run test:e2e
+```
+
+Browser tests exercise the real UI with an isolated Tauri IPC adapter. Native snapshot
+storage is checked separately with `cargo test -p desktop builder::tests --lib` from
+the repository root.
+
 ## Open in Rerun
 
 Install the standalone **Rerun 0.37.2** viewer, matching the pinned Rust SDK:
@@ -305,3 +356,57 @@ The packaging preflight rejects a missing asset compiler because Tauri otherwise
 logs an error and can produce a fallback-only bundle. Confirm the resulting app
 contains `Contents/Resources/Assets.car` and inspect its icon in Finder before
 signing and publishing. The native icon was compiled successfully with Xcode 27; the asset catalog contains light, dark, and tinted layered variants. Finder appearance still needs a visual check of the rebuilt package.
+
+
+## Local simulation (Milestone 2)
+
+Save a robot version in Builder, open **Test**, resolve simulation errors, then choose **Open in Simulation**. Simulation also provides a saved-version selector and refresh action. Component-specific Builder findings open the affected link in Configure.
+
+The first local adapter uses the official [MuJoCo Python bindings](https://mujoco.readthedocs.io/en/stable/python.html). Open **Settings → Tools → MuJoCo → Install MuJoCo**, or use the **Simulation settings** icon beside Refresh. One-time setup downloads an isolated Python 3.11 environment and MuJoCo 3.2.7 into Humaan's local app data folder, verifies a physics step, and selects the managed runtime automatically. It does not modify system Python. Setup requires internet access; simulation works offline afterward.
+
+The Tools card shows installation phases, readiness, errors, **Refresh MuJoCo status**, and **Repair MuJoCo**. A failed repair keeps the previously published runtime intact. Managed installation supports Apple Silicon macOS, x86-64 Linux, and x86-64 Windows, using the same checksum-verified setup-tool bootstrap as dataset tools. Installation tests currently cover Apple Silicon macOS.
+
+For an existing environment, expand **Advanced runtime** under **Settings → Tools → MuJoCo** and enter its Python executable's absolute path. Leave this field blank to use managed MuJoCo. **Use installed MuJoCo** in Settings switches back from a custom environment. Advanced manual setup remains available:
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install mujoco==3.2.7
+```
+
+On Windows, the environment executable is `.venv\Scripts\python.exe`.
+
+Select duration, gravity, and joint position targets, then run. Playback is available after computation finishes. Completed and failed runs remain in the sidebar. Each run stores its source version ID, a complete robot snapshot, configuration, and result under `.humaan/simulation/runs`. Completed runs additionally retain engine version, generated MJCF, frames, joint positions, contact counts, and adapter assumptions. Reloading results does not require the original Builder snapshot to remain present.
+
+Current physics scope:
+
+- Fixed root at the saved robot placement, floor at 0 m, gravity along negative Z, and contact friction 0.8.
+- Fixed, revolute, continuous, and prismatic joints; finite joint limits and effort-limited position servos (kp=20, kv=2). Hardware velocity limits are not enforced.
+- Explicit mass, center of mass, and full inertia for non-root links; missing physical properties must be supplied rather than inferred.
+- Primitive collisions and STL/OBJ mesh convex hulls. Links without collision geometry are explicitly reported; sensors are not simulated.
+- 2 ms physics step, 20 Hz recorded playback, 0.1–10 simulated seconds, at most 256 links, and a 60-second worker timeout.
+- A completed run indicates physics execution, not task success or hardware deployment readiness.
+
+Validation and tests:
+
+```sh
+bun test src/lib/builder/model.test.ts src/lib/simulation/model.test.ts
+bunx playwright test tests/builder.spec.ts
+```
+
+From the repository root, using the environment's Python path:
+
+```sh
+.venv/bin/python apps/desktop/src-tauri/src/simulation_worker_test.py
+cargo test -p desktop --lib
+HUMAAN_TEST_PYTHON=/absolute/path/to/.venv/bin/python cargo test -p desktop simulation::tests::real_mujoco_worker_round_trip --lib -- --ignored
+```
+
+Browser tests use an isolated IPC adapter. Python tests exercise real physics; the opt-in Rust integration test exercises the embedded worker and persistent result storage.
+
+The managed-installer integration test downloads into a temporary directory and requires internet access:
+
+```sh
+cargo test -p humaan-engine simulation_environment::tests::install_and_probe_real_runtime --lib -- --ignored
+```
+
+Builder’s **Place on ground** now updates the robot’s saved placement. Save a new version and select it in Simulation to apply that placement; **Restore origin** resets it. Existing saved runs keep their original results. Explode movements remain view-only.

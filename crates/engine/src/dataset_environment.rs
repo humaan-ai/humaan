@@ -154,11 +154,11 @@ fn platform() -> Result<(&'static str, &'static str)> {
             "45a3ff2a68c246ed9fd2d9df032496c1beebe480357f356ac25d2cb144884c30",
         )),
         _ => Err(invalid(
-            "Managed dataset tools support Apple Silicon macOS, x86-64 Linux, and x86-64 Windows. Use a compatible custom Python environment on other platforms.",
+            "Managed tools support Apple Silicon macOS, x86-64 Linux, and x86-64 Windows. Use a compatible custom Python environment on other platforms.",
         )),
     }
 }
-fn bootstrap(root: &Path, log: &Path) -> Result<PathBuf> {
+pub(crate) fn bootstrap(root: &Path, log: &Path) -> Result<PathBuf> {
     let (target, expected) = platform()?;
     let tools = root.join(format!("uv-{UV_VERSION}"));
     let executable = tools.join(if cfg!(windows) { "uv.exe" } else { "uv" });

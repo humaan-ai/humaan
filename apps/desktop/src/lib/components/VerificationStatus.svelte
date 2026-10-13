@@ -1,4 +1,8 @@
 <script lang="ts">
+  import * as Tooltip from "$lib/components/ui/tooltip/index.js";
+  import * as Dialog from "$lib/components/ui/dialog/index.js";
+  import IconButton from "$lib/components/ui/icon-button.svelte";
+  import { Button } from "$lib/components/ui/button/index.js";
   import CircleCheck from "@lucide/svelte/icons/circle-check";
   import CircleX from "@lucide/svelte/icons/circle-x";
   import Circle from "@lucide/svelte/icons/circle";
@@ -6,13 +10,8 @@
   import Info from "@lucide/svelte/icons/info";
   import type { VerificationReport } from "$lib/verification";
   let { report, id }: { report?: VerificationReport; id: string } = $props();
-  const tooltipId = $props.id();
-  let tooltipPosition = $state({ left: 0, top: 0 });
-  function positionTooltip(event: Event) {
-    const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    tooltipPosition = { left: Math.max(8, Math.min(bounds.left, window.innerWidth - 272)), top: Math.min(bounds.bottom + 6, window.innerHeight - 180) };
-  }
-  let dialog = $state<HTMLDialogElement>();
+  let detailsOpen = $state(false);
+  let detailsButton = $state<HTMLButtonElement | null>(null);
   const status = $derived(report?.status ?? "not_checked");
   const label = $derived(status === "verified" ? "Verified" : status === "failed" ? "Failed" : status === "needs_recheck" ? "Needs recheck" : "Not checked");
   const color = $derived(status === "verified" ? "text-success" : status === "failed" ? "text-error" : status === "needs_recheck" ? "text-warning" : "text-muted");
@@ -23,17 +22,26 @@
 <span class="inline-flex items-center gap-1.5 whitespace-nowrap {color}">
   {#if status === "verified"}<CircleCheck size={13} aria-hidden="true" />{:else if status === "failed"}<CircleX size={13} aria-hidden="true" />{:else if status === "needs_recheck"}<RefreshCw size={13} aria-hidden="true" />{:else}<Circle size={13} aria-hidden="true" />{/if}
   <span>{label}</span>
-  <span class="group relative inline-flex">
-    <button class="rounded p-1 text-muted hover:text-title focus-visible:outline-2 focus-visible:outline-title/40" aria-label="Verification details for {id}" aria-describedby={tooltipId} onpointerenter={positionTooltip} onfocus={positionTooltip} onclick={(event) => { event.stopPropagation(); dialog?.showModal(); }}><Info size={13} aria-hidden="true" /></button>
-    <span id={tooltipId} role="tooltip" style:left="{tooltipPosition.left}px" style:top="{tooltipPosition.top}px" class="pointer-events-none fixed z-40 hidden w-64 whitespace-normal rounded border border-border-strong bg-raised p-2 text-left text-xs text-foreground shadow-lg group-hover:block group-focus-within:block"><span class="block text-title">{timestamp}</span><span class="mt-1 block">{explanation}</span></span>
-  </span>
+  <Tooltip.Root>
+    <Tooltip.Trigger>
+      {#snippet child({ props })}
+        <IconButton {...props} bind:ref={detailsButton} aria-label="Verification details for {id}" onclick={(event) => { event.stopPropagation(); detailsOpen = true; }}><Info size={13} aria-hidden="true" /></IconButton>
+      {/snippet}
+    </Tooltip.Trigger>
+    <Tooltip.Content side="bottom" sideOffset={6} class="block w-64 whitespace-normal text-left"><span class="block text-title">{timestamp}</span><span class="mt-1 block">{explanation}</span></Tooltip.Content>
+  </Tooltip.Root>
 </span>
-<dialog bind:this={dialog} aria-label="Verification details" class="fixed m-auto w-[calc(100%_-_3rem)] max-w-lg rounded-xl border border-border-strong bg-background p-6 text-sm text-foreground shadow-2xl backdrop:bg-black/60">
-  <h2 class="text-lg font-medium">Verification: {label}</h2>
+<Dialog.Root bind:open={detailsOpen}>
+{#if detailsOpen}
+<Dialog.Content class="max-w-lg" showCloseButton={false} onCloseAutoFocus={(event) => { event.preventDefault(); detailsButton?.focus(); }}>
+  <Dialog.Description class="sr-only">Saved integrity verification details for this recording.</Dialog.Description>
+  <Dialog.Title>Verification: {label}</Dialog.Title>
   <p class="mt-3 break-all font-mono text-xs text-muted">{id}</p>
   <p class="mt-3 text-xs text-muted">Last check: {timestamp}</p>
   <p class="mt-4 whitespace-pre-wrap break-words">{explanation}</p>
   {#if report?.status === "needs_recheck" && report.error}<p class="mt-3 whitespace-pre-wrap break-words text-error">Previous check: {report.error}</p>{/if}
   <p class="mt-4 text-xs text-muted">Checks cover file integrity, not task outcome or review quality. Refresh detects ordinary file size and modification-time changes; Verify all rechecks hashes.</p>
-  <div class="mt-5 flex justify-end"><button class="rounded border border-border-strong bg-raised px-3 py-2 hover:bg-hover focus-visible:outline-2 focus-visible:outline-title/40" onclick={(event) => { event.stopPropagation(); dialog?.close(); }}>Close</button></div>
-</dialog>
+  <div class="mt-5 flex justify-end"><Button onclick={(event) => { event.stopPropagation(); detailsOpen = false; }}>Close</Button></div>
+</Dialog.Content>
+{/if}
+</Dialog.Root>
