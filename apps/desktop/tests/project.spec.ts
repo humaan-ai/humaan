@@ -9,7 +9,8 @@ test('project overview, folder browsing, asset search, and terminal layout', asy
         if (command === 'experience_project') return { root: '/test/project', project: { id: 'test', name: 'Inspection robot' } };
         if (command === 'experience_list') return { records: [], warning: null };
         if (command === 'experience_reviews') return {};
-        if (command === 'learning_set_list' || command === 'builder_list') return [];
+        if (['learning_set_list', 'builder_list', 'simulation_list', 'deployment_list'].includes(command)) return [];
+        if (command === 'simulation_tools_status') return { ready: false, installing: false, phase: 'Not installed' };
         if (command === 'project_create_entry') { localStorage.setItem('created-entry', JSON.stringify(args)); return; }
         if (command === 'project_read_file') return { content: localStorage.getItem('file-content') || 'solid base\nendsolid base', readOnly: false };
         if (command === 'project_save_file') { localStorage.setItem('file-content', args.content); return; }
@@ -27,7 +28,9 @@ test('project overview, folder browsing, asset search, and terminal layout', asy
   const explorer = page.getByRole('complementary', { name: 'Project', exact: true });
   const menu = page.getByRole('navigation', { name: 'Project sections' });
   await expect(workspace.getByRole('heading', { name: 'Inspection robot' })).toBeVisible();
-  await menu.getByRole('button', { name: 'Files', exact: true }).click();
+  await expect(workspace.getByRole('heading', { name: 'Give your robot a starting point' })).toBeVisible();
+  await page.screenshot({ path: '/tmp/humaan-overview-empty.png' });
+  await workspace.getByRole('complementary', { name: 'Project resources' }).getByRole('button', { name: 'Files Browse and edit source files' }).click();
   await explorer.getByRole('button', { name: 'meshes', exact: true }).click();
   await explorer.getByRole('button', { name: 'base.stl', exact: true }).click();
   const editor = workspace.getByRole('textbox', { name: 'Editor base.stl' });

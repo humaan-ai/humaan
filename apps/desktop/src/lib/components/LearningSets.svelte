@@ -6,13 +6,14 @@
   import { Input } from "$lib/components/ui/input/index.js";
   import { Textarea } from "$lib/components/ui/textarea/index.js";
   import { NativeSelect } from "$lib/components/ui/native-select/index.js";
-  import LayoutDashboard from "@lucide/svelte/icons/layout-dashboard";
-  import X from "@lucide/svelte/icons/x";
+  import ArrowLeft from "@lucide/svelte/icons/arrow-left";
   import { tick } from "svelte";
-  import Layers from "@lucide/svelte/icons/layers";
+  import Plus from "@lucide/svelte/icons/plus";
+  import RefreshCw from "@lucide/svelte/icons/refresh-cw";
   import ActionLabel from "./ActionLabel.svelte";
   import { feedback } from "$lib/feedback";
   import ExperienceNavigation from "./ExperienceNavigation.svelte";
+  import LoopNavigation from "./LoopNavigation.svelte";
   import WorkspaceColumn from "./WorkspaceColumn.svelte";
   import { studio } from "$lib/studio.svelte";
   import StudioSidebar from "./StudioSidebar.svelte";
@@ -31,41 +32,28 @@
   let activeOperation = $state("");
   let selectedSet = $state<string | null>(null);
   let sets = $state<LearningSet[]>([]);
-  let openTabs = $state<string[]>([]);
-  let history: (string | null)[] = [];
   let discardOpen = $state(false);
-  const tabs = $derived([{ id: null, label: "Overview" }, ...openTabs.map(id => ({ id, label: id === "draft" ? "New learning set" : sets.find(set => set.id === id)?.name ?? "Learning set" }))]);
+  let setQuery = $state("");
+  let setFilter = $state("all");
+  const visibleSets = $derived(sets.filter(set =>
+    `${set.name} ${set.learning_goal} ${set.curator}`.toLowerCase().includes(setQuery.trim().toLowerCase()) &&
+    (setFilter === "all" || set.members.some(member => member.review.review.outcome === setFilter))
+  ));
   async function selectTab(id: string | null) {
-    if (id !== null && !openTabs.includes(id)) openTabs = [...openTabs, id];
-    if (selectedSet !== id) history = [...history.filter(value => value !== selectedSet), selectedSet];
     selectedSet = id;
     await tick();
-    document.getElementById(`loop-tab-${id ?? "overview"}`)?.focus();
+    document.getElementById("loop-panel-learning-sets")?.focus();
   }
   async function closeTab(id: string) {
     if (busy) return;
     if (id === "draft" && dirty) { discardOpen = true; return; }
-    openTabs = openTabs.filter(value => value !== id);
-    history = history.filter(value => value !== id);
-    if (selectedSet === id) {
-      selectedSet = history.reverse().find(value => value === null || openTabs.includes(value)) ?? null;
-      history.reverse();
-    }
-    await tick();
-    document.getElementById(`loop-tab-${selectedSet ?? "overview"}`)?.focus();
+    await selectTab(null);
   }
   async function discardDraft() {
     discard();
     dirty = false;
     discardOpen = false;
-    await closeTab("draft");
-  }
-  function navigateTabs(event: KeyboardEvent) {
-    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-    const index = tabs.findIndex(tab => tab.id === selectedSet);
-    const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
-    event.preventDefault();
-    void selectTab(tabs[next].id);
+    await selectTab(null);
   }
 
   let selected = $state<Record<string, { review_revision: number; reason: string }>>({});
@@ -115,8 +103,6 @@
       } });
       sets = [set, ...sets];
       discard();
-      openTabs = openTabs.map(id => id === "draft" ? set.id : id);
-      history = history.map(id => id === "draft" ? set.id : id);
       await selectTab(set.id);
       feedback.publish({ title: "Learning set saved", detail: `“${set.name}” · ${set.members.length} experiences`, kind: "success" });
     }, "Saving learning set");
@@ -136,49 +122,57 @@
 <div class="flex h-full min-h-0 gap-1 overflow-x-auto">
 <StudioSidebar title="Experiences">
   <ExperienceNavigation {busy} reviewDirty={blocked} loopDirty={dirty} />
-  <div class="shrink-0 p-3">
-    <Button class="w-full" aria-current={selectedSet === "draft" ? "page" : undefined} disabled={busy} onclick={() => selectTab("draft")}>{dirty ? "Continue draft · Unsaved" : "Create learning set"}</Button>
-  </div>
-  <div class="flex items-center justify-between px-4 py-2 text-xs text-muted"><span>Learning sets ({sets.length})</span><Button disabled={busy} onclick={() => work(refresh)}><ActionLabel active={activeOperation === "Loading learning sets"} label="Refresh" pending="Refreshing…" /></Button></div>
+  <div class="px-4 py-3 text-xs text-muted">Learning sets ({visibleSets.length} of {sets.length})</div>
   <div class="min-h-0 flex-1 overflow-y-auto">
-    {#each sets as set (set.id)}
+    {#each visibleSets as set (set.id)}
       <Button variant="ghost" class="block h-auto w-full whitespace-normal rounded-none px-4 py-3 text-left {selectedSet === set.id ? 'bg-selection' : 'bg-transparent'}" aria-current={selectedSet === set.id ? "page" : undefined} disabled={busy} onclick={() => selectTab(set.id)}>
         <span class="block truncate">{set.name}</span><span class="mt-1 block text-xs text-muted">{set.members.length} experiences</span>
       </Button>
-    {:else}<p class="px-4 py-3 text-xs text-muted">{loaded ? "No saved learning sets yet." : "Loading learning sets…"}</p>{/each}
+    {:else}<p class="px-4 py-3 text-xs text-muted">{loaded ? (sets.length ? "No matching learning sets." : "No saved learning sets yet.") : "Loading learning sets…"}</p>{/each}
   </div>
 </StudioSidebar>
 <WorkspaceColumn active={studio.activeView === "loop"}>
 <div class="workbench-panel flex min-h-0 min-w-80 flex-1 flex-col overflow-hidden">
-  <div class="flex h-[35px] shrink-0 items-center bg-[#222222] shadow-[inset_0_-1px_0_var(--color-border)]">
-    <div role="tablist" aria-label="Loop tabs" tabindex={-1} class="flex h-full min-w-0 overflow-x-auto" onkeydown={navigateTabs}>
-      {#each tabs as tab, index (tab.id)}
-        <div role="presentation" class="group/tab flex h-full max-w-64 shrink-0 items-center rounded-tr-lg {index === 0 ? 'rounded-tl-none border-l-0' : '-ml-px rounded-tl-lg'} border border-y-0 {selectedSet === tab.id ? 'relative z-10 border-border bg-background text-title' : 'border-transparent bg-[#222222] text-muted shadow-[inset_0_-1px_0_var(--color-border)] hover:bg-[#292929]'}">
-          <button role="tab" id="loop-tab-{tab.id ?? 'overview'}" aria-controls="loop-panel-learning-sets" aria-selected={selectedSet === tab.id} tabindex={selectedSet === tab.id ? 0 : -1} class="flex h-full min-w-0 items-center gap-2 px-3 text-xs focus-visible:outline-1 focus-visible:outline-ring focus-visible:-outline-offset-2" onclick={() => selectTab(tab.id)} title={tab.label}>
-            {#if tab.id === null}<LayoutDashboard size={14} class="shrink-0" aria-hidden="true" />{:else}<Layers size={14} class="shrink-0" aria-hidden="true" />{/if}
-            <span class="truncate">{tab.label}</span>
-            {#if tab.id === "draft" && dirty}<span aria-label="Unsaved draft" class="h-1.5 w-1.5 shrink-0 rounded-full bg-accent"></span>{/if}
-          </button>
-          {#if tab.id !== null}<IconButton class="mr-2 text-muted {selectedSet === tab.id ? '' : 'opacity-0 group-hover/tab:opacity-100 group-focus-within/tab:opacity-100'}" aria-label="Close {tab.label} tab" disabled={busy} onclick={() => closeTab(tab.id!)}><X size={14} aria-hidden="true" /></IconButton>{/if}
-        </div>
-      {/each}
-    </div>
+  <LoopNavigation instance="learning-sets" learningSetDirty={dirty} />
+  <div id="loop-workspace-learning-sets" role="tabpanel" aria-labelledby="loop-section-learning-sets-learning-sets" class="flex min-h-0 flex-1 flex-col">
+  <div role="group" aria-label="Learning set actions" class="flex min-h-[57px] shrink-0 flex-wrap items-center gap-3 border-b border-border px-4 py-3">
+    <Button variant="default" aria-pressed={selectedSet === 'draft'} disabled={busy} onclick={() => selectTab("draft")}><Plus size={14} />{dirty ? 'Continue draft' : 'Create learning set'}</Button>
+    <Input class="min-w-32 max-w-56 flex-1" aria-label="Search learning sets" placeholder="Search learning sets" bind:value={setQuery} />
+    <NativeSelect class="w-auto" aria-label="Filter learning sets" bind:value={setFilter}><option value="all">All learning sets</option><option value="failure">Includes failures</option><option value="success">Includes successes</option></NativeSelect>
+    <IconButton variant="outline" size="icon" aria-label="Refresh learning sets" title="Refresh learning sets" disabled={busy} onclick={() => work(refresh)}><RefreshCw size={14} class={activeOperation === 'Loading learning sets' ? 'animate-spin motion-reduce:animate-none' : ''} /></IconButton>
+    {#if selectedSet !== null}<Button class="ml-auto" disabled={busy} onclick={() => closeTab(selectedSet!)}><ArrowLeft size={14} />Back to learning sets</Button>{/if}
   </div>
-<div id="loop-panel-learning-sets" role="tabpanel" aria-labelledby="loop-tab-{selectedSet ?? 'overview'}" tabindex={0} class="min-h-0 flex-1 overflow-y-auto px-7 py-6" aria-busy={busy}>
+<div id="loop-panel-learning-sets" role="region" aria-label="Learning set content" tabindex="-1" class="min-h-0 flex-1 overflow-y-auto px-7 py-6" aria-busy={busy}>
   {#if blocked}<p class="mb-4 rounded border border-warning/40 p-3 text-warning">Save or discard your experience review before curating. Your learning-set draft is preserved.</p>{/if}
   {#if selectedSet === null}
-    <h2 class="text-xl font-medium">Overview</h2>
-    <p class="mt-3 max-w-lg leading-relaxed text-muted">Select useful experiences, preserve their evidence, and prepare training datasets.</p>
-    <p class="mt-5 text-sm">{loaded ? `${sets.length} saved learning sets` : "Loading learning sets…"}</p>
-    {#if loaded && !sets.length}<p class="mt-2 text-sm text-muted">No learning sets yet. Create your first set from reviewed experiences.</p>{/if}
-    <Button class="mt-4" disabled={busy || blocked} onclick={() => selectTab("draft")}>{dirty ? "Continue draft" : "Create learning set"}</Button>
-    <div class="mt-6 space-y-2">
-      {#each sets as set (set.id)}
-        <Button class="block h-auto w-full whitespace-normal p-4 text-left" onclick={() => selectTab(set.id)}>
-          <span class="block font-medium">{set.name}</span><span class="mt-1 block text-xs text-muted">{set.members.length} experiences · {set.curator}</span>
-        </Button>
-      {/each}
-    </div>
+    {#if !loaded}
+      <p class="text-muted" role="status">Loading learning sets…</p>
+    {:else if !sets.length}
+      <div class="flex min-h-48 flex-col items-center justify-center gap-3 text-center">
+        <h2 class="text-lg font-medium">No learning sets yet</h2>
+        <p class="max-w-sm text-muted">Create a learning set from reviewed experiences.</p>
+        <Button variant="default" disabled={busy || blocked} onclick={() => selectTab("draft")}><Plus size={14} />{dirty ? 'Continue draft' : 'Create learning set'}</Button>
+      </div>
+    {:else}
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm" aria-label="Learning sets">
+          <thead class="border-b border-border text-xs text-muted"><tr><th class="px-3 py-3 font-medium">Name</th><th class="px-3 py-3 font-medium">Learning goal</th><th class="px-3 py-3 font-medium">Experiences</th><th class="px-3 py-3 font-medium">Curator</th><th class="px-3 py-3 font-medium">Created</th></tr></thead>
+          <tbody>
+            {#each visibleSets as set (set.id)}
+              <tr class="border-b border-border hover:bg-hover">
+                <td class="px-3 py-3"><button class="text-left font-medium text-title hover:underline focus-visible:outline focus-visible:outline-ring disabled:opacity-45" disabled={busy} onclick={() => selectTab(set.id)}>{set.name}</button></td>
+                <td class="max-w-80 px-3 py-3"><p class="line-clamp-2" title={set.learning_goal}>{set.learning_goal}</p></td>
+                <td class="px-3 py-3 tabular-nums">{set.members.length}</td>
+                <td class="px-3 py-3">{set.curator}</td>
+                <td class="whitespace-nowrap px-3 py-3 text-xs text-muted">{new Date(set.created_at_unix_ms).toLocaleString()}</td>
+              </tr>
+            {:else}
+              <tr><td colspan="5" class="px-3 py-8 text-center text-muted">No matching learning sets. <Button variant="ghost" onclick={() => { setQuery = ''; setFilter = 'all'; }}>Clear filters</Button></td></tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+    {/if}
   {/if}
   {#if error}<p class="mt-4 text-error" role="alert">{error}</p>{/if}
   <div hidden={selectedSet !== "draft"}>
@@ -238,12 +232,13 @@
   {/each}
 </div>
 </div>
+</div>
 </WorkspaceColumn>
 </div>
 
 <Dialog.Root bind:open={discardOpen}>
 {#if discardOpen}
-<Dialog.Content showCloseButton={false} onCloseAutoFocus={(event) => { event.preventDefault(); document.getElementById(`loop-tab-${selectedSet ?? "overview"}`)?.focus(); }}>
+<Dialog.Content showCloseButton={false} onCloseAutoFocus={(event) => { event.preventDefault(); document.getElementById("loop-panel-learning-sets")?.focus(); }}>
   <Dialog.Title>Discard this draft?</Dialog.Title>
   <Dialog.Description class="mt-3">The learning set details and experience selections have not been saved.</Dialog.Description>
   <div class="mt-5 flex justify-end gap-3">

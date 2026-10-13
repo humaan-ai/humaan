@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
+  import Maximize from '@lucide/svelte/icons/maximize';
   import * as THREE from 'three';
   import { TransformControls } from 'three/addons/controls/TransformControls.js';
   import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -224,7 +225,7 @@
 
 <div bind:this={host} class="relative min-h-0 flex-1 overflow-hidden">
   <div class="absolute left-3 top-3 z-10 flex max-w-[calc(100%-24px)] flex-wrap items-center gap-2">
-    <Button size="sm" onclick={fit} disabled={!ready}>Fit view</Button>
+    <Button size="icon-sm" onclick={fit} disabled={!ready} aria-label="Zoom to fit" title="Zoom to fit"><Maximize size={15} /></Button>
     {#if allowGroundPlacement}
       <Button size="sm" onclick={placeOnGround} disabled={!ready || !robot.links.length || explode} title="Set the whole robot’s placement on the ground; save a version to use it in simulation">Place on ground</Button>
       {#if Math.abs(groundOffset) > 1e-8}<Button size="sm" onclick={restoreOrigin}>Restore origin</Button><span class="rounded bg-surface px-2 py-1 text-[10px] text-muted">Ground placement · Save to simulate</span>{/if}
@@ -243,5 +244,5 @@
   <span bind:this={worldLabel} class="pointer-events-none absolute ml-2 mt-2 rounded bg-surface/90 px-1.5 py-0.5 text-[10px] text-muted">World (0, 0, 0)</span>
   {#if !robot.links.length}<p class="pointer-events-none absolute inset-0 flex items-center justify-center px-8 text-center text-sm text-muted">Add a module or import a robot to begin.</p>{/if}
   {#if error}<p class="absolute bottom-10 left-3 right-3 rounded bg-surface p-3 text-xs text-error" role="alert">{error}</p>{/if}
-  <p class="pointer-events-none absolute bottom-3 left-3 text-xs text-muted">{explode ? 'Select a part · Drag handles to move · Drag background to orbit' : 'Drag to orbit'} · Scroll to zoom · Right-drag to pan · Metres</p>
+  <p class="pointer-events-none absolute bottom-3 left-3 text-xs text-[#666666]">{explode ? 'Select a part · Drag handles to move · Drag background to orbit' : 'Drag to orbit'} · Scroll to zoom · Right-drag to pan · Metres</p>
 </div>

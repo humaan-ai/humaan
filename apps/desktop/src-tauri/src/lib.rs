@@ -1,7 +1,11 @@
-mod experiences;
 mod builder;
-mod simulation;
+mod deployments;
+mod policies;
+mod cloud;
+mod experiences;
 mod project_browser;
+mod simulation;
+mod training;
 
 use tauri::{
     menu::{Menu, MenuItem, MenuItemKind, Submenu},
@@ -79,10 +83,29 @@ pub fn run() {
             experiences::dataset_tools_install,
             simulation::simulation_tools_status,
             simulation::simulation_tools_install,
+            cloud::cloud_connect,
+            cloud::cloud_jobs,
+            cloud::cloud_quote,
+            cloud::cloud_launch,
+            cloud::cloud_job_action,
+            training::training_catalog,
+            training::training_create,
+            training::training_load,
+            training::training_run,
             simulation::simulation_list,
             simulation::simulation_load,
             simulation::simulation_delete,
             simulation::simulation_run,
+            policies::policy_list,
+            policies::policy_load,
+            policies::policy_promote,
+            policies::policy_check,
+            policies::policy_assignment,
+            policies::policy_assign,
+            deployments::deployment_list,
+            deployments::deployment_load,
+            deployments::deployment_save,
+            deployments::deployment_sample,
             builder::builder_list,
             builder::builder_load,
             builder::builder_save,

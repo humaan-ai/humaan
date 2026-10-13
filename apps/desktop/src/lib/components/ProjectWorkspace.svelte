@@ -2,6 +2,7 @@
   import * as Dialog from "$lib/components/ui/dialog/index.js";
   import FileText from "@lucide/svelte/icons/file-text";
   import FileCode from "@lucide/svelte/icons/file-code";
+  import ProjectOverview from "./ProjectOverview.svelte";
   import ProjectFilePreview from "./ProjectFilePreview.svelte";
   import ProjectCodeEditor from "./ProjectCodeEditor.svelte";
   import RefreshCw from "@lucide/svelte/icons/refresh-cw";
@@ -169,11 +170,6 @@
             </ul>
           {/if}
         </div>
-    {:else}
-    <div class="min-h-0 overflow-auto p-4">
-      <p class="break-words text-sm font-medium text-title">{project.project.name}</p>
-      <p class="mt-2 break-all text-xs text-muted">{project.root}</p>
-    </div>
     {/if}
   </StudioSidebar>
   <WorkspaceColumn active={studio.activeView === 'project'}>
@@ -204,30 +200,7 @@
       </header>
       {/if}
       {#if section === 'overview'}
-        <div class="overflow-auto p-6">
-          <div class="mx-auto max-w-3xl">
-            <p class="text-xs text-muted">LOCAL PROJECT</p>
-            <h2 class="mt-2 break-words text-2xl font-semibold text-title">{project.project.name}</h2>
-            <p class="mt-2 text-sm text-muted">Build your robot, prepare simulation, and improve it through experiences.</p>
-            <dl class="mt-6 grid gap-4 rounded-md border border-border p-4 text-sm">
-              <div><dt class="text-xs text-muted">Location</dt><dd class="mt-1 break-all">{project.root}</dd></div>
-              <div><dt class="text-xs text-muted">Project ID</dt><dd class="mt-1 break-all">{project.project.id}</dd></div>
-            </dl>
-            <div class="mt-6 grid gap-3 sm:grid-cols-2">
-              {#each sections.slice(1) as item}
-                <button class="rounded-md border border-border p-4 text-left hover:bg-selection focus-visible:outline-2 focus-visible:outline-ring" onclick={() => navigate(item.id)}>
-                  <item.icon size={20} strokeWidth={1.5} class="mb-3 text-muted" aria-hidden="true" />
-                  <span class="block font-medium text-title">{item.label}</span>
-                  <span class="mt-1 block text-xs text-muted">{item.id === 'files' ? 'Browse folders and inspect project files.' : 'Find robot models, meshes, images, and recordings.'}</span>
-                </button>
-              {/each}
-            </div>
-            <div class="mt-6 flex flex-wrap gap-2">
-              <Button variant="outline" onclick={() => studio.activeView = 'builder'}>Open Builder</Button>
-              <Button variant="ghost" onclick={() => studio.activeView = 'experiences'}>Open Experiences</Button>
-            </div>
-          </div>
-        </div>
+        <ProjectOverview {project} onnavigate={navigate} />
       {:else}
         {#if active}
           {#if active.error}<p role="alert" class="shrink-0 border-b border-border p-3 text-sm text-destructive">{active.error}</p>{/if}

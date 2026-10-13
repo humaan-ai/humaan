@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Button } from "$lib/components/ui/button/index.js";
+  import { studio } from "$lib/studio.svelte";
   import ExperienceStatus from "./ExperienceStatus.svelte";
   let { name, experiences, reviews, loaded, onrecords }: {
     name: string; experiences: { id: string; robot: string; task: string }[];
@@ -40,5 +41,6 @@
       {:else}<p class="mt-3 text-sm text-muted">No reviews yet.</p>{/each}
     </section>
   {/if}
+  <section class="mt-6 rounded-lg border border-border-strong p-5"><h2 class="font-medium">Physical robot sessions</h2><p class="mt-2 text-sm text-muted">Inspect measured joint motion with its saved robot version. Session evaluation and learning-set integration are planned.</p><Button class="mt-4" onclick={() => { studio.deploymentSection = "sessions"; studio.activeView = "deployments"; }}>Browse robot sessions</Button></section>
   <Button class="mt-6" onclick={() => onrecords("all")}>Browse records</Button>
 </div>

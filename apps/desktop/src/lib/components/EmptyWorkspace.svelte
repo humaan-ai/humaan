@@ -4,7 +4,7 @@
   import StudioSidebar from "./StudioSidebar.svelte";
 
   let { view }: { view: Exclude<StudioView, "experiences" | "loop"> } = $props();
-  const titles = { project: "Project", builder: "Builder", simulation: "Simulation", deployments: "Deployments", cloud: "Cloud resources" };
+  const titles = { project: "Project", builder: "Builder", simulation: "Simulation", deployments: "Deployments", cloud: "Compute", catalog: "Catalog" };
 </script>
 
 <div class="flex min-h-0 flex-1 gap-1">

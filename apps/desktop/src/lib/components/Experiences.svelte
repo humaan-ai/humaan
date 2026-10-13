@@ -22,7 +22,11 @@
   import AIChatPanel from "./AIChatPanel.svelte";
   import WorkspaceColumn from "./WorkspaceColumn.svelte";
   import ExperienceNavigation from "./ExperienceNavigation.svelte";
+  import Training from "./Training.svelte";
   import Simulation from "./Simulation.svelte";
+  import Deployments from "./Deployments.svelte";
+  import Catalog from "./Catalog.svelte";
+  import CloudResources from "./CloudResources.svelte";
   import Builder from "./Builder.svelte";
   import ProjectWorkspace from "./ProjectWorkspace.svelte";
   import EmptyWorkspace from "./EmptyWorkspace.svelte";
@@ -94,6 +98,10 @@
     });
   }
   let activeTab = $state<"overview" | "records" | "detail">("overview");
+  let trainingVisited = $state(false);
+  let deploymentsVisited = $state(false);
+  $effect(() => { if (studio.activeView === "deployments") deploymentsVisited = true; });
+  $effect(() => { if (studio.loopSection === "training") trainingVisited = true; });
   let settingsOpen = $state(false);
   function selectView(view: StudioView) {
     studio.chatExpanded = false;
@@ -201,8 +209,8 @@
     finally { choosingLocation = false; }
   }
   function showNewProject() {
-    if (busy || curationBusy || (studio.builderBusy || studio.simulationBusy || studio.editorBusy) || dirty || curationDirty || (studio.builderDirty || studio.editorDirty)) {
-      reportError("Cannot create a project yet", "Finish running operations and save or discard your file, Builder, review, and learning-set drafts first.");
+    if (busy || curationBusy || (studio.deploymentBusy || studio.builderBusy || studio.simulationBusy || studio.trainingBusy || studio.editorBusy) || dirty || curationDirty || (studio.builderDirty || studio.trainingDirty || studio.editorDirty)) {
+      reportError("Cannot create a project yet", "Finish running operations and save or discard your file, Builder, training, review, and learning-set drafts first.");
       return;
     }
     if (newProjectOpen) return;
@@ -216,12 +224,12 @@
     if (studio.project !== previousProject) newProjectOpen = false;
   }
   async function open(create = false) {
-    if (busy || curationBusy || (studio.builderBusy || studio.simulationBusy || studio.editorBusy)) {
-      feedback.publish({ title: "An operation is still running", detail: "Wait for it to finish before opening another project.", kind: "warning", popup: true });
+    if (busy || curationBusy || (studio.deploymentBusy || studio.builderBusy || studio.simulationBusy || studio.trainingBusy || studio.editorBusy)) {
+      feedback.publish({ title: "An operation is still running", detail: "Stop Live Link and save its session, or wait for running operations to finish before opening another project.", kind: "warning", popup: true });
       return;
     }
-    if (dirty || curationDirty || (studio.builderDirty || studio.editorDirty)) {
-      feedback.publish({ title: "Unsaved drafts", detail: "Save or discard your file, Builder, review, and learning-set drafts before opening another project.", kind: "warning", popup: true });
+    if (dirty || curationDirty || (studio.builderDirty || studio.trainingDirty || studio.editorDirty)) {
+      feedback.publish({ title: "Unsaved drafts", detail: "Save or discard your file, Builder, training, review, and learning-set drafts before opening another project.", kind: "warning", popup: true });
       return;
     }
     await work(create ? "Creating project" : "Opening project", async () => {
@@ -294,22 +302,26 @@
 <StudioSettings bind:open={settingsOpen} />
 
 <div class="flex h-full min-w-0 gap-1">
-  {#if project}<StudioActivityBar busy={!!busy || curationBusy} reviewDirty={dirty} loopDirty={curationDirty} settingsActive={settingsOpen} onsettings={openSettings} onview={selectView} />{/if}
+  {#if project}<StudioActivityBar busy={!!busy || curationBusy} reviewDirty={dirty} loopDirty={curationDirty || studio.trainingDirty} settingsActive={settingsOpen} onsettings={openSettings} onview={selectView} />{/if}
 <section hidden={studio.chatOpen && studio.chatExpanded} class="flex min-w-0 flex-1 flex-col text-sm" aria-label="Studio workspace" aria-busy={!!busy || curationBusy}>
   {#if !project}
     <WorkspaceColumn><div class="workbench-panel h-full overflow-auto"><Welcome busy={!!busy} onopen={() => open()} oncreate={showNewProject} /></div></WorkspaceColumn>
   {:else}
-    {#if studio.activeView !== "project" && studio.activeView !== "experiences" && studio.activeView !== "loop" && studio.activeView !== "builder" && studio.activeView !== "simulation"}
+    {#if studio.activeView !== "project" && studio.activeView !== "experiences" && studio.activeView !== "loop" && studio.activeView !== "builder" && studio.activeView !== "simulation" && studio.activeView !== "cloud" && studio.activeView !== "catalog" && studio.activeView !== "deployments"}
       <EmptyWorkspace view={studio.activeView} />
     {/if}
     {#key project.root}
+      {#if deploymentsVisited}<div class="min-h-0 flex-1" hidden={studio.activeView !== "deployments"}><Deployments root={project.root} /></div>{/if}
+      {#if studio.activeView === "catalog"}<Catalog />{/if}
+      {#if studio.activeView === "cloud"}<CloudResources root={project.root} />{/if}
       <div class="min-h-0 flex-1" hidden={studio.activeView !== "project"}><ProjectWorkspace {project} /></div>
       <div class="min-h-0 flex-1" hidden={studio.activeView !== "builder"}>
         <Builder root={project.root} />
       </div>
       <div class="min-h-0 flex-1" hidden={studio.activeView !== "simulation"}><Simulation root={project.root} /></div>
       <div class="min-h-0 flex-1" hidden={studio.activeView !== "loop"}>
-        <LearningSets root={project.root} {experiences} {reviews} bind:busy={curationBusy} bind:dirty={curationDirty} blocked={dirty} />
+        <div class="h-full" hidden={studio.loopSection !== "learning-sets"}><LearningSets root={project.root} {experiences} {reviews} bind:busy={curationBusy} bind:dirty={curationDirty} blocked={dirty} /></div>
+        {#if trainingVisited}<div class="h-full" hidden={studio.loopSection !== "training"}><Training root={project.root} reviewDirty={dirty} loopDirty={curationDirty} /></div>{/if}
       </div>
     {/key}
     <div class="min-h-0 flex-1" hidden={studio.activeView !== "experiences"}>
@@ -317,7 +329,7 @@
       <StudioSidebar title="Experiences">
         <ExperienceNavigation busy={!!busy || curationBusy} reviewDirty={dirty} loopDirty={curationDirty} />
         <div class="p-4 flex flex-col gap-3">
-          <NativeSelect aria-label="Review queue" bind:value={queue} disabled={!!busy || dirty || curationBusy}>
+          <NativeSelect class="w-full" aria-label="Review queue" bind:value={queue} disabled={!!busy || dirty || curationBusy}>
             <option value="all">All experiences</option><option value="unreviewed">Unreviewed</option><option value="reviewed">Reviewed</option><option value="unknown">Unknown outcome</option><option value="failure">Failure</option><option value="timeout">Timeout</option><option value="aborted">Aborted</option><option value="success">Success</option><option value="assisted">Human assisted</option>
           </NativeSelect>
           <span class="text-xs text-muted">{filtered.length} in queue · {experiences.filter(e => latest(e.id)?.review.review_state === "reviewed").length} reviewed</span>

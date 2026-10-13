@@ -5,6 +5,9 @@
   import { studio } from '$lib/studio.svelte';
   import { emptyRobot, type Robot, type SavedVersion } from '$lib/builder/model';
   import { simulationChecks, type RunSummary, type SimulationRun } from '$lib/simulation/model';
+  import PanelResizeHandle from './PanelResizeHandle.svelte';
+  import X from '@lucide/svelte/icons/x';
+  import ScanSearch from '@lucide/svelte/icons/scan-search';
   import StudioSidebar from './StudioSidebar.svelte';
   import WorkspaceColumn from './WorkspaceColumn.svelte';
   import BuilderViewport from './BuilderViewport.svelte';
@@ -30,6 +33,19 @@
   const frames = $derived(run?.result.frames || []);
   const displayed = $derived(run?.robot || robot);
   const frame = $derived(frames[frameIndex]);
+  let inspectorOpen = $state(true), inspectorWidth = $state(280);
+  let inspectorTab = $state<'preflight' | 'details'>('preflight');
+  const inspectorChecks = $derived(simulationChecks(displayed).toSorted((a, b) => Number(b.severity === 'error') - Number(a.severity === 'error')));
+  const inspectorStatus = $derived(run ? run.status === 'completed' ? 'Completed' : 'Failed' : !versionId ? 'No robot' : inspectorChecks.length ? `${inspectorChecks.length} issue${inspectorChecks.length === 1 ? '' : 's'}` : 'Ready');
+  $effect(() => { inspectorTab = run ? 'details' : 'preflight'; });
+  function setInspector(open: boolean) {
+    inspectorOpen = open;
+    localStorage.setItem('humaan-simulation-inspector-open', String(open));
+  }
+  function resizeInspector(width: number) {
+    inspectorWidth = width;
+    localStorage.setItem('humaan-simulation-inspector-width', String(width));
+  }
   let deleteOpen = $state(false), pendingDelete = $state<RunSummary | null>(null);
   async function deleteRun() {
     const item = pendingDelete; if (!item || busy) return;
@@ -87,6 +103,9 @@
     else untrack(() => { void refreshRuntime(); if (!studio.simulationVersion) void work(refresh); });
   });
   onMount(() => {
+    inspectorOpen = localStorage.getItem('humaan-simulation-inspector-open') !== 'false';
+    const savedWidth = Number(localStorage.getItem('humaan-simulation-inspector-width'));
+    if (Number.isFinite(savedWidth) && savedWidth >= 240) inspectorWidth = Math.min(440, savedWidth);
     const savedPython = localStorage.getItem('humaan-simulation-python') || '';
     // Earlier Simulation builds persisted their default system interpreter.
     // Only migrate that implicit default; explicit custom choices stay custom.
@@ -140,7 +159,17 @@
   </StudioSidebar>
   <WorkspaceColumn active={studio.activeView === 'simulation'}>
     <section class="workbench-panel relative flex min-h-0 flex-1 flex-col" aria-label="Simulation workspace" aria-busy={busy}>
-      <header class="flex h-[35px] shrink-0 items-center gap-2 border-b border-border px-3 text-xs"><span class="truncate">{run ? `${run.name} · ${run.status}` : 'Simulation setup'}</span>{#if run}<Button size="sm" variant="ghost" class="ml-auto" disabled={busy} onclick={() => { run = null; playing = false; }}>Setup</Button>{/if}</header>
+      <header class="flex h-[35px] shrink-0 items-center gap-2 border-b border-border px-3 text-xs">
+        <span class="min-w-0 truncate">{run ? `${run.name} · ${run.status}` : 'Simulation setup'}</span>
+        <button aria-label={`Simulation status: ${inspectorStatus}`} title="Open Inspector" class="shrink-0 rounded border border-border px-1.5 py-0.5 text-[10px] {inspectorStatus === 'Ready' || inspectorStatus === 'Completed' ? 'text-success' : inspectorStatus === 'Failed' ? 'text-error' : 'text-muted'}" onclick={() => setInspector(true)}>{inspectorStatus}</button>
+        <div class="ml-auto flex shrink-0 items-center gap-1">
+          {#if run}<Button size="sm" variant="ghost" disabled={busy} onclick={() => { run = null; playing = false; }}>Setup</Button>{/if}
+          <Button size="sm" variant="ghost" class={inspectorOpen ? 'text-title' : 'text-muted'} aria-label="Toggle simulation Inspector" title={inspectorOpen ? 'Hide Inspector' : 'Show Inspector'} aria-expanded={inspectorOpen} aria-controls="simulation-inspector" onclick={() => setInspector(!inspectorOpen)}>
+            <ScanSearch size={18} strokeWidth={1.5} aria-hidden="true" />
+            Inspector
+          </Button>
+        </div>
+      </header>
       {#if error}<p role="alert" class="p-3 text-xs text-error">{error}</p>{/if}
       {#if busy}
         <div class="pointer-events-none absolute inset-x-3 top-[47px] z-20 flex justify-center">
@@ -153,19 +182,32 @@
       {/if}
       <div class="flex min-h-0 flex-1">
         <BuilderViewport robot={displayed} {selected} onselect={id => selected = id} poses={frame?.poses} floorHeight={run ? run.result.floorHeight ?? -0.01 : 0} />
-        <aside class="w-64 shrink-0 overflow-y-auto border-l border-border p-3 text-xs" aria-label="Simulation details">
-          {#if run}
-            <h3 class="font-medium">Run details</h3><p class="mt-2 break-all text-muted">Robot version: {run.versionId}</p><p class="mt-1 text-muted">{run.result.engine || 'Runtime unavailable'} · {run.config.duration} s · Gravity {run.config.gravity}</p>
+        {#if inspectorOpen}
+        <aside id="simulation-inspector" class="relative ml-1 flex min-h-0 shrink-0 flex-col border-l border-border text-xs" style:width={`${inspectorWidth}px`} aria-label="Simulation Inspector">
+          <PanelResizeHandle label="Resize simulation Inspector" width={inspectorWidth} min={240} max={440} edge="left" onresize={resizeInspector} />
+          <div class="flex h-[35px] shrink-0 items-center justify-between border-b border-border px-3"><span class="font-medium">Inspector</span><Button variant="ghost" size="icon-xs" aria-label="Close simulation Inspector" onclick={() => setInspector(false)}><X size={14} /></Button></div>
+          <div class="flex shrink-0 gap-1 border-b border-border p-2" role="group" aria-label="Inspector sections">
+            <Button size="sm" variant="ghost" class={inspectorTab === 'preflight' ? 'bg-selection text-title' : ''} aria-pressed={inspectorTab === 'preflight'} onclick={() => inspectorTab = 'preflight'}>Preflight</Button>
+            <Button size="sm" variant="ghost" class={inspectorTab === 'details' ? 'bg-selection text-title' : ''} aria-pressed={inspectorTab === 'details'} disabled={!run} onclick={() => inspectorTab = 'details'}>Run details</Button>
+          </div>
+          <div class="min-h-0 flex-1 overflow-y-auto p-3">
+          {#if inspectorTab === 'details' && run}
+            <p class="mt-2 break-all text-muted">Robot version: {run.versionId}</p><p class="mt-1 text-muted">{run.result.engine || 'Runtime unavailable'} · {run.config.duration} s · Gravity {run.config.gravity}</p>
             {#if run.result.error}<div class="mt-3 rounded border border-border p-2"><h4 class="font-medium">Saved run error</h4><p class="mt-1 text-muted">Recorded {new Date(run.createdAt).toLocaleString()}. This describes the runtime used for that attempt.</p><p role="alert" class="mt-2 text-error">{run.result.error}</p>{#if !studio.simulationPython && studio.simulationRuntime?.ready}<p class="mt-2 text-success">Managed MuJoCo is ready now. Start a new run to use it.</p>{/if}</div>{/if}
             {#if run.status === 'completed'}<p class="mt-3">Peak contacts: {run.result.maxContacts}</p><p class="mt-1 text-muted">A completed run is a physics check, not a task success evaluation.</p>{/if}
             {#each Object.entries(frame?.joints || {}) as [id, value]}<p class="mt-2">{run.robot.joints.find(j => j.id === id)?.name}: {value.toFixed(3)}</p>{/each}
             {#each run.result.warnings || [] as warning}<p class="mt-3 text-warning">{warning}</p>{/each}
           {:else}
-            <h3 class="font-medium">Preflight checks</h3>
-            {#each checks as check}<button class="mt-2 block w-full text-left {check.severity === 'error' ? 'text-error' : 'text-warning'}" onclick={() => { if (check.linkId) selected = check.linkId; }}>{check.message}</button>{:else}<p class="mt-2 text-success">Ready for local simulation.</p>{/each}
+            {#if !run && !versionId}<p class="text-muted">Select a saved robot version to check its simulation properties.</p>{:else}
+            <div class="flex items-center justify-between"><h3 class="font-medium">Preflight checks</h3><span class="text-muted">{inspectorChecks.length ? `${inspectorChecks.length} issues` : 'Ready'}</span></div>
+            {#if run}<p class="mt-2 text-muted">Checks for this run’s saved robot snapshot.</p>{/if}
+            {#each inspectorChecks as check}<button class="mt-2 block w-full text-left {check.severity === 'error' ? 'text-error' : 'text-warning'}" onclick={() => { if (check.linkId) selected = check.linkId; }}>{check.message}</button>{:else}<p class="mt-2 text-success">Ready for local simulation.</p>{/each}
             <p class="mt-4 text-muted">Edit properties in Builder and save a new version to resolve issues. Unsaved Builder changes are never used by a run.</p>
+            {/if}
           {/if}
+          </div>
         </aside>
+        {/if}
       </div>
       {#if frames.length}<div class="flex h-10 shrink-0 items-center gap-2 border-t border-border px-3 text-xs"><Button size="sm" aria-label={playing ? 'Pause simulation playback' : 'Play simulation playback'} onclick={() => { if (frameIndex === frames.length - 1) frameIndex = 0; playing = !playing; }}>{#if playing}<Pause size={14} />{:else}<Play size={14} />{/if}</Button><Button size="sm" aria-label="Reset simulation playback" onclick={() => { playing = false; frameIndex = 0; }}><RotateCcw size={14} /></Button><input class="min-w-0 flex-1" type="range" aria-label="Simulation timeline" min="0" max={frames.length-1} step="1" bind:value={frameIndex} oninput={() => playing = false} /><span>{(frame?.time || 0).toFixed(2)} / {frames.at(-1)?.time.toFixed(2)} s</span></div>{/if}
     </section>

@@ -23,9 +23,9 @@ Tauri's native process (`bun run tauri dev`).
 ## Studio navigation
 
 After opening a project, the left activity bar provides **Project**, **Builder**,
-**Simulation**, **Experiences**, and **Deployments**, with **Cloud resources** at the bottom.
+**Simulation**, **Experiences**, and **Deployments**, with **Compute** at the bottom.
 Experiences and Loops use vertical navigation inside the Experiences panel.
-Project, Simulation, Deployments, and Cloud resources currently have empty workspaces. The Settings icon opens a modal dialog with General, Tools, and About sections. The welcome screen stays free of project navigation.
+Compute provides RunPod provisioning and remote job monitoring. Deployments currently has an empty workspace. The Settings icon opens a modal dialog with General, Tools, and About sections. The welcome screen stays free of project navigation.
 Each view has a contextual sidebar, initially 260px wide. Drag its divider, or
 focus the divider and use Left/Right arrows (Home/End for the limits), to resize it.
 The activity bar is 48px wide and the footer retains the current project name.
@@ -410,3 +410,126 @@ cargo test -p humaan-engine simulation_environment::tests::install_and_probe_rea
 ```
 
 Builder’s **Place on ground** now updates the robot’s saved placement. Save a new version and select it in Simulation to apply that placement; **Restore origin** resets it. Existing saved runs keep their original results. Explode movements remain view-only.
+
+### Training experiments (Milestone 3)
+
+Open **Experiences → Loops → Training experiments**. Create an Experience and a
+Loop, save an environment (gravity and episode duration) and a joint-reach task,
+then save an experiment using a Builder version. Environments and tasks are
+independent of robots, and saved experiments include complete snapshots. Existing
+learning sets remain accessible through **Learning sets**; this trainer does not
+consume demonstration datasets.
+
+Choose **Local · MuJoCo** to use the runtime from Settings → Tools. The initial
+trainer requires MuJoCo 3.2.7 and 1–32 finite revolute/prismatic joints. It uses
+CEM to optimize joint feedback gains, minimizing mean trajectory error across
+three training starts. A baseline controller and the learned controller are
+then evaluated on five fixed held-out starts. Success requires every joint's
+final error to be within the task's tolerance, normalized by that joint's range.
+The learned policy observes positions and velocities and emits position-servo
+targets; it is not a neural-network checkpoint or a hardware deployment.
+
+**Cloud · SSH host** executes the same experiment on an existing server:
+
+1. Set up key-based SSH authentication and verify the host key outside Humaan.
+   An SSH config alias is supported, including its port and identity settings.
+2. Create a Python environment on the server and install `mujoco==3.2.7` and
+   NumPy. No display is needed. Humaan does not run remote installation commands.
+3. Enter the SSH alias or `user@hostname` and the absolute environment Python
+   path (for example `/home/robot/venv/bin/python`). OpenSSH must be available on
+   the desktop's PATH.
+4. Launch. The full robot snapshot and meshes are sent to that host. Leave the
+   desktop connected until the results return. This CPU workload does not
+   provision or require a GPU; GPU provisioning/Isaac Sim belong to Milestone 4.
+
+Each worker has a 180-second training limit; the desktop stops waiting after
+240 seconds. Smaller iteration/population counts and shorter episodes help with
+large assemblies. Runs interrupted by application shutdown are identified when
+history is reopened. Remote reconnection, cancellation, and detached jobs are
+not supported yet; a disconnected remote worker can continue until its bounded
+training limit, and its results cannot be recovered automatically.
+
+Results include training metrics, baseline and held-out evaluation, first-episode
+3D playback, the learned policy, and immutable provenance under
+`.humaan/training/runs/<id>.json`. Experiments live in
+`.humaan/training/experiments/<id>.json`. Policy formula, for each saved joint ID:
+
+```text
+action = clamp(q + gain * (target - q) - damping * qvel, lower, upper)
+```
+
+The existing MuJoCo position servo applies each action with kp=20, kv=2 and the
+saved effort limit. Hardware velocity limits are not enforced. Compare requires
+the same task/environment numerical settings, evaluation seeds, adapter, and
+MuJoCo version. It allows different robots or policies, without assuming those
+robots have equal task difficulty. No training improvement or success is guaranteed.
+
+Verification:
+
+```sh
+bun run check
+bun test src/lib/training/model.test.ts
+bunx playwright test tests/training.spec.ts
+cargo test -p desktop --lib
+HUMAAN_TEST_PYTHON=/path/to/mujoco/python cargo test -p desktop training::tests::real_training_round_trip --lib -- --ignored
+/path/to/mujoco/python -m unittest discover -s apps/desktop/src-tauri/src -p '*worker_test.py'
+```
+
+Run the first three commands from `apps/desktop`; run the others from the repository
+root. Browser tests use mocked IPC. Python and the opt-in Rust test execute real
+MuJoCo; SSH argument validation is tested, but a live cloud provider has not been
+integration-tested.
+
+
+## RunPod cloud jobs (Milestone 4 initial integration)
+
+1. Save an experiment under Experiences → Loops → Training experiments.
+2. Choose **Cloud · provision RunPod GPU**, then **Configure cloud job**, or open **Compute**.
+3. Connect with a RunPod API key that can query GPUs/accounts and manage pods. The key stays in backend memory for the app session; reconnect after restarting Humaan. No local AWS account, bucket, or SSH setup is required. The desktop needs `curl` on PATH.
+4. Select an experiment, GPU, country (or any available region), runtime, and stop/terminate behavior. Review the live estimate before provisioning. Compute pricing excludes storage, transfer, and taxes and may change before allocation.
+5. Keep the Compute workspace open until upload reaches Preparing or Running. Monitoring polls every 15 seconds while visible. The pod then continues independently when Humaan disconnects.
+6. Retrieve completed results before terminating the pod. They appear in Training experiments after refreshing its run list, with the original experiment/robot and 3D replay. Stop retains billable pod-volume storage; Release compute deletes it. If the pod has stopped, resume it in RunPod's console to access its volume and retrieve results, then stop or terminate it explicitly. Manual resume can incur new GPU charges and does not establish a new Humaan runtime deadline.
+
+The initial runtime is `runpod/pytorch:2.8.0-py3.11-cuda12.8.1-cudnn-devel-ubuntu22.04`, with an isolated MuJoCo 3.2.7 / NumPy 2.0.2 environment. It uses CPU-based CEM feedback training; it does not accelerate this trainer on GPU. Isaac Sim/Isaac Lab, live viewport streaming, and NVIDIA Brev are follow-ups. New jobs use Secure Cloud, one GPU, at least 4 vCPUs/16 GB RAM, 20 GB container storage, and a 20 GB pod volume.
+
+Each launch sets a provider-side stop or terminate deadline, independent of desktop connectivity. A lost create response is shown as uncertain; refresh the existing job before creating another. The worker uses an 80 MB upload limit, 240-second install and training subprocess limits, authenticated HTTP endpoints, idempotent submissions, and persistent result files. A new app session reconnects through the same account; account mismatches cannot control another job. Account keys never enter the pod; a random per-job worker token is saved with owner-only job-file permissions and stripped from frontend responses. Do not publish `.humaan/training/cloud-jobs` files: they contain project snapshots and worker access tokens.
+
+The app uses RunPod's documented [GraphQL API](https://graphql-spec.runpod.io/) for account/catalog/pricing and pod lifecycle, and its [HTTP proxy](https://docs.runpod.io/pods/connect-to-a-pod) for worker traffic. [RunPod storage behavior](https://docs.runpod.io/pods/storage/types) determines whether data survives stops and termination. NVIDIA Brev's [instance creation interface](https://docs.nvidia.com/brev/cli/instance-creation) is the planned second provider.
+
+Validation: Rust lifecycle tests use mocked provider/worker responses; Python tests exercise supervisor success/failure and HTTP authentication, duplicate submissions, path handling, and restart state; Playwright covers cost review, launch, reconnect, retrieval, and cleanup. No funded RunPod account or live GPU provisioning was used, so container boot, live API integration, remote deadlines, and provider cleanup still require integration verification.
+
+```sh
+cargo test -p desktop cloud:: --lib
+cd apps/desktop/src-tauri/src
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest cloud_worker_test.py
+# From apps/desktop:
+bunx playwright test tests/cloud.spec.ts tests/training.spec.ts
+```
+
+### Catalog preview
+
+Open **Catalog** below Compute to browse the sample Parts, Components, Modules, and Robots collection. Search by name or tag, filter by category, and open an item to orbit its 3D concept model and inspect its metadata. The Download action demonstrates the downloaded state for the current view; it does not persist files. Add to project, supplier links, and Connect cloud display placeholder messages. No API, account, purchase, or Builder changes are made. Sample geometry, versions, and compatibility text are illustrative, not hardware specifications.
+
+### Deployments: read-only Live Link
+
+Deployments → Robots now registers a physical robot against an immutable Builder version. Add robot, choose the version, and map each movable joint to a named telemetry channel. Rotating joints accept calibrated radians or degrees; prismatic joints accept metres. Direction and offset apply as `position = source × unit conversion × direction + offset`, with the offset in radians/metres. Each saved connection retains the full robot snapshot and meshes. To change configuration, add a new connection profile.
+
+Live Link uses a **local read-only telemetry bridge**, not a direct SO-101 USB driver. Run a hardware-specific reader that produces calibrated measured positions and pipe its JSON lines into:
+
+```sh
+python3 apps/desktop/tools/telemetry_bridge.py --port 9876
+```
+
+Each input line is an object such as `{"shoulder_pan":0.12,"shoulder_lift":-0.2}`. Include every mapped channel. The bridge listens only on `127.0.0.1`, returns the latest measurement as `{"sequence":1,"positions":{...}}` followed by a newline, and increments the sequence only for a new input sample. Humaan polls at up to 10 Hz with one request in flight, sends no bytes/commands to the bridge, rejects missing/non-finite/out-of-limit joint measurements, and disconnects if the sequence stops advancing for two seconds. Bridge restarts require reconnecting. No physical SO-101 or USB/calibration adapter has been validated with this delivery.
+
+Record session captures local monotonic receipt timestamps and converted joint positions (up to 10,000 samples). Stop & save or Disconnect saves the recording; a telemetry fault ends and saves the session. Failed saves retain samples in memory with Retry save. Navigation between workspaces retains Live Link; switching projects is blocked while connected or while samples await saving. Closing/reloading the application can still lose unsaved samples, so stop and save first. This initial workflow does not record images, hardware acquisition timestamps, or dropped samples; it is a visualization/inspection recorder, not a synchronized training dataset.
+
+Deployments → Sessions provides playback and a timeline with the pinned robot definition, connection mapping, source version and end reason. Data lives in `.humaan/deployments/robots` and `.humaan/deployments/sessions`. Experiences → Overview links to these sessions. Learning-set ingestion, task/Loop association, physical motor control and policy deployment remain planned.
+
+### Policies and robot assignments
+
+After a completed training run, choose **Manage policy in Deployments**, or open **Deployments → Policies → Add trained policy**. Completed local/SSH runs and retrieved cloud results are eligible. Each policy preserves the full source run, controller, simulation evaluation/replay and robot snapshot under `.humaan/deployments/policies`. Registration is idempotent per run; source-run deletion does not remove a registered policy. Only the existing `humaan-joint-feedback-v1` controller format is supported.
+
+Select a policy and physical robot to check its exact Builder version, robot snapshot and telemetry mapping. **Assign policy** saves a local assignment; **Remove assignment** clears it. Assignment history has a check mark for the current revision and a restore action for earlier selections. Restoring appends a new revision and repeats compatibility checks. Updates detect stale revisions and use atomic file replacement. Assignment history is stored under `.humaan/deployments/policy-assignments`, and Robots shows the assigned policy in its inspector.
+
+Assignments do not start hardware. The current bridge is read-only, so physical start/stop and runtime rollback require a motor-control adapter. Simulation evaluation and matching configuration are not physical calibration or hardware validation. Policy controller parameters are immutable; train another run to change them.

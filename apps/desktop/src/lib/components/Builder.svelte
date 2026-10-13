@@ -267,7 +267,7 @@
       </details>
       <details bind:open={partsOpen} class="group/catalog border-t border-border">
         <summary class="flex h-7 cursor-pointer list-none items-center gap-1 px-2 text-xs font-medium uppercase text-title [&::-webkit-details-marker]:hidden" onclick={() => section = 'Parts'}><ChevronRight size={12} class="group-open/catalog:rotate-90" />Parts<span class="ml-auto text-[10px] text-muted">{catalog.length}</span></summary>
-        <div class="px-2 pt-1"><Button size="sm" variant="ghost" class="w-full justify-start" onclick={openCatalog}><LayoutGrid size={14} />View all parts</Button></div>
+        <div class="px-2 pt-1"><Button size="sm" variant="ghost" class="w-full justify-start" onclick={openCatalog}><LayoutGrid size={14} />View all parts</Button><Button size="sm" variant="ghost" class="w-full justify-start" onclick={() => studio.activeView = 'catalog'}><FolderOpen size={14} />Browse catalog</Button></div>
         <div class="min-h-0 flex-1 overflow-auto pb-2" role="region" aria-label="Parts catalog">
           {#each ['Robot parts', 'Saved modules'] as source}
             {@const parts = visibleParts.filter(part => part.source === source)}

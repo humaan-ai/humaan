@@ -7,7 +7,7 @@ import time
 import xml.etree.ElementTree as ET
 
 
-def simulate(payload):
+def build_model(payload):
     import mujoco
     import numpy as np
 
@@ -119,6 +119,15 @@ def simulate(payload):
     if len(seen) != len(links): raise ValueError('Disconnected or cyclic links.')
     xml_text = ET.tostring(xml, encoding='unicode')
     model = mujoco.MjModel.from_xml_string(xml_text, files)
+    return model, controlled, names, xml_text, warnings
+
+
+def simulate(payload):
+    import mujoco
+    import numpy as np
+
+    model, controlled, names, xml_text, warnings = build_model(payload)
+    duration = float(payload['config']['duration'])
     data = mujoco.MjData(model)
     for index, (j, name, target) in enumerate(controlled):
         address = model.jnt_qposadr[model.joint(name).id]
