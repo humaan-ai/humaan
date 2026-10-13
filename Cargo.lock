@@ -1303,8 +1303,9 @@ dependencies = [
 
 [[package]]
 name = "desktop"
-version = "0.0.1-alpha.0"
+version = "0.0.1-alpha.1"
 dependencies = [
+ "chrono",
  "humaan-engine",
  "rfd",
  "serde",
@@ -1312,6 +1313,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tempfile",
+ "uuid",
 ]
 
 [[package]]

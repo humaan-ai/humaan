@@ -1,4 +1,6 @@
 <script lang="ts">
+  import IconButton from "$lib/components/ui/icon-button.svelte";
+  import { Button } from "$lib/components/ui/button/index.js";
   import X from "@lucide/svelte/icons/x";
   import CircleCheck from "@lucide/svelte/icons/circle-check";
   import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
@@ -6,7 +8,6 @@
   import { feedback, dismissAfterReading, type Notice } from "$lib/feedback";
   let { notice, toast = false }: { notice: Notice; toast?: boolean } = $props();
   let copyStatus = $state("");
-  const actionClass = "rounded px-1 py-0.5 text-xs text-link hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent";
   function expiry(node: HTMLElement) {
     if (toast && notice.kind !== "error" && notice.kind !== "warning") return dismissAfterReading(node, () => feedback.dismiss(notice.id), 4000);
   }
@@ -24,7 +25,7 @@
     <div class="min-w-0 flex-1"><p class="font-medium text-title">{notice.title}</p>
       {#if !toast}<p class="mt-1 text-xs text-muted">{notice.kind} · {new Date(notice.createdAt).toLocaleTimeString()}</p>{/if}
     </div>
-    {#if toast}<button class="rounded p-0.5 text-muted hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent" aria-label="Dismiss notification" onclick={() => feedback.dismiss(notice.id)}><X size={14} aria-hidden="true" /></button>{/if}
+    {#if toast}<IconButton class="text-muted" aria-label="Dismiss notification" onclick={() => feedback.dismiss(notice.id)}><X size={14} aria-hidden="true" /></IconButton>{/if}
   </div>
   {#if notice.detail}
     <details class="mt-2 text-xs text-muted" open={!toast}>
@@ -33,9 +34,9 @@
     </details>
   {/if}
   <div class="mt-2 flex flex-wrap gap-3">
-    {#if notice.action}<button class={actionClass} onclick={() => { feedback.dismiss(notice.id); void notice.action?.run(); }}>{notice.action.label}</button>{/if}
-    {#if notice.copyText || notice.kind === "error"}<button class={actionClass} onclick={copy}>{notice.copyText ? "Copy path" : "Copy details"}</button>{/if}
-    {#if toast}<button class={actionClass} onclick={() => feedback.openPanel()}>View history</button>{/if}
+    {#if notice.action}<Button variant="link" size="xs" onclick={() => { feedback.dismiss(notice.id); void notice.action?.run(); }}>{notice.action.label}</Button>{/if}
+    {#if notice.copyText || notice.kind === "error"}<Button variant="link" size="xs" onclick={copy}>{notice.copyText ? "Copy path" : "Copy details"}</Button>{/if}
+    {#if toast}<Button variant="link" size="xs" onclick={() => feedback.openPanel()}>View history</Button>{/if}
   </div>
   {#if copyStatus}<p class="mt-2 text-xs text-muted" role="status">{copyStatus}</p>{/if}
 </article>

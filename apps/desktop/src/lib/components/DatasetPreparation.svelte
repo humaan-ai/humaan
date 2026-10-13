@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { Checkbox } from "$lib/components/ui/checkbox/index.js";
+  import { NativeSelect } from "$lib/components/ui/native-select/index.js";
+  import { Button } from "$lib/components/ui/button/index.js";
   import ActionLabel from "./ActionLabel.svelte";
   import { feedback } from "$lib/feedback";
   import { eligibilityReason, preparationBlockers, type PreparationToolStatus as ToolStatus } from "../dataset-preparation";
@@ -54,17 +57,17 @@
   <fieldset disabled={busy} class="mt-3">
     {#each eligible as member}
       <label class="mb-2 flex flex-wrap items-center gap-3 text-xs"><span class="min-w-0 flex-1 break-all">{member.experience_id}</span>
-        <select class="rounded border border-border-strong bg-raised p-2" value={assignments[member.experience_id] ?? "exclude"} onchange={(e) => assignments[member.experience_id] = e.currentTarget.value}>
+        <NativeSelect  value={assignments[member.experience_id] ?? "exclude"} onchange={(e) => assignments[member.experience_id] = e.currentTarget.value}>
           <option value="exclude">Exclude</option><option value="train">Train</option><option value="validation">Validation</option>
-        </select>
+        </NativeSelect>
       </label>
     {/each}
     <p class="mt-3 text-xs text-muted">{train.length} train · {validation.length} validation · {set.members.length - train.length - validation.length} excluded</p>
-    <label class="mt-3 flex items-start gap-2 text-xs"><input type="checkbox" bind:checked={approved} /><span>I have checked that the complete selected trajectories contain behavior suitable for imitation.</span></label>
+    <label class="mt-3 flex items-start gap-2 text-xs"><Checkbox bind:checked={approved} aria-label="Approve selected trajectories for imitation" /><span>I have checked that the complete selected trajectories contain behavior suitable for imitation.</span></label>
     {#if blockers.length}
       <div class="mt-3 rounded border border-border-strong p-3 text-xs" aria-live="polite"><p class="font-medium">Before preparing:</p><ul class="mt-2 list-disc space-y-1 pl-4">{#each blockers as blocker}<li>{blocker}</li>{/each}</ul></div>
     {:else}<p class="mt-3 text-xs text-success" role="status">Ready to prepare: tools, split assignments, and confirmation are complete.</p>{/if}
-    <button class="mt-3 rounded border border-border-strong bg-accent px-3 py-2 text-xs font-semibold text-white disabled:opacity-50" type="submit"><ActionLabel active={preparing} label="Prepare and validate dataset" pending="Preparing…" /></button>
+    <Button variant="default" class="mt-3" type="submit"><ActionLabel active={preparing} label="Prepare and validate dataset" pending="Preparing…" /></Button>
   </fieldset>
   {#if error}<p class="mt-3 whitespace-pre-wrap break-words text-error" role="alert">{error}</p>{/if}
   <p class="mt-3 text-xs text-muted">Humaan manages dataset tools locally. Output includes independent train/validation datasets and a preparation report. This checks data compatibility; it does not train or evaluate policy behavior.</p>

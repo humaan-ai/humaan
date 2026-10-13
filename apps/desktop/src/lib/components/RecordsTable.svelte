@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Button } from "$lib/components/ui/button/index.js";
   import { statusRank } from "$lib/record-sorting";
   import { createTable, createSortedRowModel, rowSortingFeature, tableFeatures, sortFn_alphanumeric, sortFn_basic, type ColumnDef } from "@tanstack/svelte-table";
   import VerificationStatus from "./VerificationStatus.svelte";
@@ -55,16 +56,16 @@
   function duration(seconds: number) { return seconds < 60 ? `${seconds.toFixed(1)}s` : `${Math.floor(seconds / 60)}m ${Math.floor(seconds % 60)}s`; }
 </script>
 
-<div class="mb-2 flex h-7 items-center justify-end">
-  {#if table.getAllLeafColumns().some(column => column.getIsSorted())}
-    <button class="rounded px-2 py-1 text-xs text-muted hover:bg-hover hover:text-title focus-visible:outline-2 focus-visible:outline-title/40" onclick={() => table.resetSorting()}>Reset sorting</button>
-  {/if}
-</div>
-<div class="overflow-x-auto rounded border border-border-strong">
-  <table class="w-full text-left text-xs" aria-label="Experience records">
-    <thead class="bg-surface text-muted"><tr>
-      {#each table.getAllLeafColumns() as column (column.id)}<th scope="col" class="whitespace-nowrap border-b border-border-strong" aria-sort={column.getIsSorted() === "desc" ? "descending" : column.getIsSorted() === "asc" ? "ascending" : "none"}>
-        <button class="flex w-full items-center gap-1.5 px-4 py-3 text-left font-medium hover:text-title focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-title/40" onclick={column.getToggleSortingHandler()}>{column.columnDef.header}
+{#if table.getAllLeafColumns().some(column => column.getIsSorted())}
+  <div class="mb-2 flex h-7 items-center justify-end">
+    <Button variant="ghost" class="text-muted" onclick={() => table.resetSorting()}>Reset sorting</Button>
+  </div>
+{/if}
+<div class="overflow-x-auto">
+  <table class="w-full text-left text-sm" aria-label="Experience records">
+    <thead class="border-b border-border text-xs text-muted"><tr>
+      {#each table.getAllLeafColumns() as column (column.id)}<th scope="col" class="whitespace-nowrap px-3 py-3 font-medium" aria-sort={column.getIsSorted() === "desc" ? "descending" : column.getIsSorted() === "asc" ? "ascending" : "none"}>
+        <button class="flex w-full items-center gap-1.5 text-left hover:text-title focus-visible:outline focus-visible:outline-ring" onclick={column.getToggleSortingHandler()}>{column.columnDef.header}
           {#if column.getIsSorted()}{#if column.getIsSorted() === "desc"}<ArrowDown size={12} aria-hidden="true" />{:else}<ArrowUp size={12} aria-hidden="true" />{/if}{/if}
         </button>
       </th>{/each}
@@ -76,18 +77,18 @@
         <!-- Rows retain table semantics and support Enter/Space as well as pointer activation. -->
         <!-- svelte-ignore a11y_no_noninteractive_tabindex a11y_no_noninteractive_element_interactions -->
         <tr tabindex={disabled(record.id) ? -1 : 0} aria-disabled={disabled(record.id)} aria-current={selectedId === record.id ? "true" : undefined}
-          class="border-b border-border last:border-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-title/40 {disabled(record.id) ? 'opacity-45' : 'cursor-pointer hover:bg-hover'} {selectedId === record.id ? 'bg-selection' : ''}"
+          class="border-b border-border focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-title/40 {disabled(record.id) ? 'opacity-45' : 'cursor-pointer hover:bg-hover'} {selectedId === record.id ? 'bg-selection' : ''}"
           onclick={(event) => { if (!(event.target instanceof Element) || !event.target.closest("button, dialog")) open(record.id); }} onkeydown={(event) => { if (event.target !== event.currentTarget) return; if (event.key === "Enter" || event.key === " ") { event.preventDefault(); open(record.id); } }}>
-          <td class="min-w-64 px-4 py-3"><span class="block text-sm font-medium text-title">{record.task}</span><span class="mt-1 block max-w-sm break-all font-mono text-[10px] leading-relaxed text-muted" title={record.id}>{shortIds[record.id]}</span></td>
-          {#if mixedRobots}<td class="px-4 py-3">{record.robot}</td>{/if}
-          <td class="whitespace-nowrap px-4 py-3"><ExperienceStatus kind="outcome" value={revision?.review.outcome} /></td>
-          <td class="whitespace-nowrap px-4 py-3"><span class="inline-flex items-center gap-1 {revision?.review.review_state === 'reviewed' ? 'text-success' : 'text-muted'}">{#if revision?.review.review_state === "reviewed"}<Eye size={13} aria-hidden="true" />Reviewed{:else}<EyeOff size={13} aria-hidden="true" />Unreviewed{/if}</span></td>
-          <td class="whitespace-nowrap px-4 py-3"><ExperienceStatus kind="assistance" value={revision?.review.assistance} /></td>
-          <td class="px-4 py-3"><VerificationStatus report={record.verification} id={record.id} /></td>
-          <td class="whitespace-nowrap px-4 py-3 tabular-nums" title={record.source_error ?? (record.duration_s == null ? "Duration unavailable" : undefined)}>{record.duration_s == null ? "—" : duration(record.duration_s)}</td>
-          <td class="whitespace-nowrap px-4 py-3 text-muted">{#if revision}<time datetime={new Date(revision.saved_at_unix_ms).toISOString()} title={new Date(revision.saved_at_unix_ms).toLocaleString()}>{new Date(revision.saved_at_unix_ms).toLocaleDateString()}</time>{:else}Not reviewed{/if}</td>
+          <td class="min-w-64 px-3 py-3"><button class="text-left font-medium text-title hover:underline focus-visible:outline focus-visible:outline-ring disabled:opacity-45" disabled={disabled(record.id)} onclick={() => open(record.id)}>{record.task}</button><span class="mt-1 block max-w-sm break-all font-mono text-[10px] leading-relaxed text-muted" title={record.id}>{shortIds[record.id]}</span></td>
+          {#if mixedRobots}<td class="px-3 py-3">{record.robot}</td>{/if}
+          <td class="whitespace-nowrap px-3 py-3"><ExperienceStatus kind="outcome" value={revision?.review.outcome} /></td>
+          <td class="whitespace-nowrap px-3 py-3"><span class="inline-flex items-center gap-1 {revision?.review.review_state === 'reviewed' ? 'text-success' : 'text-muted'}">{#if revision?.review.review_state === "reviewed"}<Eye size={13} aria-hidden="true" />Reviewed{:else}<EyeOff size={13} aria-hidden="true" />Unreviewed{/if}</span></td>
+          <td class="whitespace-nowrap px-3 py-3"><ExperienceStatus kind="assistance" value={revision?.review.assistance} /></td>
+          <td class="px-3 py-3"><VerificationStatus report={record.verification} id={record.id} /></td>
+          <td class="whitespace-nowrap px-3 py-3 tabular-nums" title={record.source_error ?? (record.duration_s == null ? "Duration unavailable" : undefined)}>{record.duration_s == null ? "—" : duration(record.duration_s)}</td>
+          <td class="whitespace-nowrap px-3 py-3 text-xs text-muted">{#if revision}<time datetime={new Date(revision.saved_at_unix_ms).toISOString()} title={new Date(revision.saved_at_unix_ms).toLocaleString()}>{new Date(revision.saved_at_unix_ms).toLocaleDateString()}</time>{:else}Not reviewed{/if}</td>
         </tr>
-      {:else}<tr><td colspan={columns.length} class="px-4 py-10 text-center text-muted">{loaded ? "No records match the current filters. Import recordings or adjust the table filters." : "Catalog not loaded. Use Refresh to try again."}</td></tr>{/each}
+      {:else}<tr><td colspan={columns.length} class="px-3 py-8 text-center text-muted">{loaded ? "No records match the current filters. Import recordings or adjust the table filters." : "Catalog not loaded. Use Refresh to try again."}</td></tr>{/each}
     </tbody>
   </table>
 </div>
