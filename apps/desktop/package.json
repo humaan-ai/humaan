@@ -10,6 +10,7 @@
     "check": "svelte-kit sync && svelte-check --tsgo --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsgo --tsconfig ./tsconfig.json --watch",
     "tauri": "tauri",
+    "test:unit": "bun test ./src ./tests/*.test.ts",
     "test:builder": "bun test src/lib/builder/model.test.ts",
     "test:e2e": "playwright test"
   },

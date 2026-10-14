@@ -71,7 +71,7 @@ jobs:
         working-directory: apps/desktop
         run: |
           bun run check
-          bun test
+          bun run test:unit
 
       - name: Test desktop backend
         run: cargo test -p desktop --lib --locked
