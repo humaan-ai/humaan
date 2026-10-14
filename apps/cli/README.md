@@ -112,3 +112,18 @@ cargo test -p humaan-cli -p humaan-engine
 CLI releases use `cli-v<version>` independently of Studio. The
 [macOS workflow](../../.github/workflows/cli-macos-signing.yml) builds and notarizes
 Apple Silicon CLI artifacts.
+
+The [Linux workflow](../../.github/workflows/cli-linux.yml) tests and builds an
+x86-64 CLI on Ubuntu 22.04, then packages `humaan` and `LICENSE` in
+`humaan-cli_<version>_linux_x86_64.tar.gz` with a SHA-256 checksum file.
+Run it manually with a blank `release_tag` to download build artifacts, or push a
+matching `cli-v<version>` tag to attach the downloads to an existing GitHub release.
+Manual runs can also specify an existing release tag.
+
+To build locally on Linux, install Rust and a C/C++ build toolchain, then run from
+the repository root:
+
+```sh
+cargo build -p humaan-cli --release --locked
+./target/release/humaan --help
+```

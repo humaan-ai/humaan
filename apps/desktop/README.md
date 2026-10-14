@@ -335,6 +335,35 @@ Studio releases use `studio-v<version>` independently of the CLI. The
 [macOS workflow](../../.github/workflows/macos-signing.yml) builds and notarizes
 Apple Silicon Studio artifacts.
 
+The [Linux workflow](../../.github/workflows/studio-linux.yml) tests and builds
+x86-64 Studio on Ubuntu 22.04, producing `.deb` and `.AppImage` downloads with a
+SHA-256 checksum file. Run it manually with a blank `release_tag` for build
+artifacts, or push a matching `studio-v<version>` tag to attach the downloads to
+an existing GitHub release. Manual runs can also specify an existing release tag.
+
+To build locally on Ubuntu 22.04 or newer, install Rust and Bun, then install the
+native build dependencies:
+
+```sh
+sudo apt-get update
+sudo apt-get install -y build-essential pkg-config curl wget file \
+  libwebkit2gtk-4.1-dev libxdo-dev libssl-dev \
+  libayatana-appindicator3-dev librsvg2-dev patchelf
+```
+
+From this directory:
+
+```sh
+bun install --frozen-lockfile
+bun run tauri build --bundles deb,appimage -- --locked
+```
+
+Packages are written to `target/release/bundle/` at the repository root. Tauri
+automatically merges `src-tauri/tauri.linux.conf.json` to use the PNG icon on Linux.
+Install the Debian package with `sudo apt install ./Humaan_<version>_amd64.deb`,
+or make the AppImage executable with `chmod +x <file>.AppImage` before launching it.
+Linux runtime compatibility still needs verification on each supported distribution.
+
 ## Native macOS icon
 
 `src-tauri/icons/Humaan.icon` is the editable Icon Composer project used for the
