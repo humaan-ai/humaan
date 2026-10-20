@@ -1,0 +1,10 @@
+{
+  "title": "Reference",
+  "defaultOpen": false,
+  "pages": [
+    "index",
+    "[Project structure](/docs/projects/structure)",
+    "[Project schema](/docs/projects/schema)",
+    "[Proposed project format](/docs/projects/proposed-format)"
+  ]
+}

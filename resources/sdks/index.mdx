@@ -1,0 +1,55 @@
+---
+title: "SDKs"
+---
+
+# SDKs
+
+Humaan's shared Rust engine powers local recording operations in Studio and CLI.
+The repository currently provides this source-level integration rather than a
+dedicated, stable SDK package for each language.
+
+## Integration Options
+
+| Language or environment | Available approach |
+| --- | --- |
+| Rust | Use `humaan-engine` from a matching source checkout. |
+| Python | Invoke the CLI with `--json` and parse its output. No dedicated Python SDK is provided in this repository. |
+| JavaScript or TypeScript | Invoke the CLI from a runtime with process access. No dedicated JavaScript SDK is provided in this repository. |
+| Shell and automation tools | Run CLI commands, check exit codes, and consume JSON output. |
+
+## Rust Engine
+
+The `humaan-engine` crate lives in `crates/engine`. Its Rust import name is
+`humaan_engine`. For a crate inside a checkout, add a path dependency pointing to
+that directory; resolve the path relative to the consuming `Cargo.toml`.
+
+For example, a crate directly under the repository root can use:
+
+```toml
+[dependencies]
+humaan-engine = { path = "../crates/engine" }
+```
+
+The engine exposes project discovery, recording import and export, artifact
+verification, annotations, and learning sets. The optional `rerun` feature enables
+the replay module. See the [API reference](../api/index.mdx) for entry points.
+
+Generate implementation reference documentation from the repository root:
+
+```sh
+cargo doc -p humaan-engine --no-deps
+```
+
+Open `target/doc/humaan_engine/index.html` after the command completes. Public Rust
+interfaces are evolving in alpha; use a matching source revision and review changes
+before upgrading.
+
+## Integrating from Other Languages
+
+Use the [CLI](../cli/index.mdx) when a process interface is sufficient. Pass arguments as
+an argument array in your language's process API, capture stdout and stderr
+separately, and parse stdout as JSON only after checking the exit status.
+
+The CLI currently covers project identity and recording operations. Engine
+features such as saving review revisions and creating learning sets do not have
+matching CLI subcommands yet.

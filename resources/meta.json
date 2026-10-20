@@ -1,0 +1,10 @@
+{
+  "title": "Developer Resources",
+  "pages": [
+    "index",
+    "changelog",
+    "sdks",
+    "cli",
+    "api"
+  ]
+}

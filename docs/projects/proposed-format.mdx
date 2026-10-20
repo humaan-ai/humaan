@@ -1,0 +1,134 @@
+---
+title: "Proposed Project Format"
+---
+
+# Proposed Project Format
+
+Status: design proposal. Humaan does not currently load this layout or the version
+2 manifest below. Use the [current structure](structure.mdx) and
+[version 1 schema](schema.mdx) for projects opened by existing releases.
+
+The proposed layout gives user-authored robot and learning definitions readable
+locations, while keeping application state and generated metadata under `.humaan`.
+Each definition has one responsibility and refers to other resources explicitly.
+
+## Proposed Layout
+
+```text
+warehouse-robot/
+├── .humaan/
+│   ├── project.json
+│   ├── workspace.local.json
+│   ├── cache/
+│   ├── recordings/
+│   ├── learning-sets/
+│   └── runs/
+├── robots/
+│   └── mobile-arm/
+│       ├── robot.json
+│       ├── model.urdf
+│       └── meshes/
+├── tasks/
+│   └── pick-and-place.task.json
+├── simulations/
+│   └── warehouse.simulation.json
+├── training/
+│   └── pick-and-place.training.json
+├── policies/
+│   └── <policy-id>/
+│       ├── policy.json
+│       └── checkpoints/
+├── deployments/
+│   └── warehouse-arm.deployment.json
+├── scripts/
+├── README.md
+└── .gitignore
+```
+
+Create folders when their workflows need them. Keep recordings and learning sets
+at their current paths to limit migration work.
+
+## Proposed File Responsibilities
+
+| File | Responsibility |
+| --- | --- |
+| `.humaan/project.json` | Shared project identity and default resource references. |
+| `.humaan/workspace.local.json` | Machine-specific open tabs, panel sizes, and selections. Exclude from version control. |
+| `.humaan/cache/` | Rebuildable indexes and thumbnails. Exclude from version control. |
+| `.humaan/runs/` | Generated simulation, training, and evaluation records, separated by workflow and run ID. Preserve provenance needed to reproduce results. |
+| `robot.json` | Robot identity and references to the physical model, joints, sensors, and hardware configuration. |
+| `model.urdf`, `meshes/` | Robot geometry, links, joints, and physical properties. |
+| `*.task.json` | Task identity, observation/action requirements, success conditions, and constraints. |
+| `*.simulation.json` | Robot, task, scene, simulator settings, and reproducibility settings. |
+| `*.training.json` | Learning-set references, data preparation/splits, base policy, hyperparameters, compute requirements, and outputs. |
+| `policy.json` | Policy identity, input/output contract, checkpoint checksums, training provenance, and evaluation references. |
+| `*.deployment.json` | Robot and immutable policy references, runtime settings, and rollout configuration. |
+| `scripts/` | Project-specific preparation, import, and evaluation utilities. |
+
+These responsibilities are a design outline. Domain field names and required
+properties need separate schemas before these files become supported interfaces.
+
+## Proposed Version 2 Manifest
+
+```json
+{
+  "version": 2,
+  "id": "b351b99e-591e-4cbb-8d58-5f9447b504a3",
+  "name": "Warehouse Robot",
+  "description": "Pick-and-place learning workspace",
+  "defaults": {
+    "robot": "robots/mobile-arm/robot.json",
+    "task": "tasks/pick-and-place.task.json"
+  }
+}
+```
+
+| Field | Proposed contract |
+| --- | --- |
+| `version` | Required integer `2`. |
+| `id` | Required UUID, preserved when migrating version 1. |
+| `name` | Required display name with version 1 name validation. |
+| `description` | Optional string describing the learning goal or project context. |
+| `defaults` | Optional object containing optional `robot` and `task` references. |
+| `defaults.robot` | Project-relative path to a robot definition. |
+| `defaults.task` | Project-relative path to a task definition. |
+
+Reject unknown fields at each object level. Keep the manifest small: resource
+definitions, run histories, and secrets belong outside it.
+
+## Naming and References
+
+Use JSON for Humaan configuration and publish a JSON Schema for each document
+type. Give user-authored files readable lowercase names with hyphens; use stable
+IDs for object identity rather than deriving identity from filenames.
+
+Resolve configuration paths relative to the project root using `/` separators.
+Reject absolute paths and paths escaping the project. Define a consistent symbolic
+link policy before introducing these references. This path contract applies to
+proposed configuration references; recording artifact paths retain their existing
+recording-relative contract.
+
+Pin immutable resource versions and content checksums in saved runs and deployment
+records. A mutable path can serve as a project default, but cannot establish which
+bytes were used for an experiment. Record random seeds, tool versions, prepared
+dataset fingerprints, and evaluation inputs where reproducibility requires them.
+
+Store credential references in shared configuration and resolve their values
+from the local credential store or environment. Generated run records must not
+capture secret values.
+
+## Migration Requirements
+
+Implement version 2 reading and schema validation before writing new manifests.
+Keep version 1 readable, and make upgrades explicit because older readers cannot
+open version 2 projects.
+
+Migration must preserve project IDs, experience IDs, recording bytes, review
+histories, and immutable learning-set snapshots. Map existing Builder, training,
+simulation, and deployment collections to the new definitions and run records;
+do not assume renaming directories is sufficient.
+
+Validate references before publishing migrated files, preserve the original
+project on failure, and define how migration can resume or roll back after an
+interruption. Verify migrated projects in both Studio and CLI before making
+version 2 the default.

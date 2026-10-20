@@ -1,0 +1,87 @@
+---
+title: "Project Schema"
+---
+
+# Project Schema
+
+The `.humaan/project.json` manifest identifies a local Humaan project. Version 1
+contains only identity metadata; recordings, learning sets, and desktop workflow
+records have their own documents.
+
+## Version 1 Manifest
+
+```json
+{
+  "version": 1,
+  "id": "b351b99e-591e-4cbb-8d58-5f9447b504a3",
+  "name": "Warehouse Robot"
+}
+```
+
+| Field | Type | Required | Responsibility and validation |
+| --- | --- | --- | --- |
+| `version` | Integer | Yes | Must equal `1`. Selects the project manifest format. |
+| `id` | String | Yes | Must parse as a UUID. Initialization generates a UUID v4. Identity remains stable across folder moves and display-name changes. |
+| `name` | String | Yes | Display name. Must contain a non-whitespace character and no control characters. Initialization trims surrounding whitespace. |
+
+Unknown fields, missing fields, and unsupported versions are rejected. A name
+does not have to match the directory name. Initialization does not impose a name
+length limit beyond the validation above.
+
+## JSON Schema Reference
+
+The following JSON Schema describes the portable version 1 document shape.
+Validators must enable UUID `format` checking. Humaan's Rust validation remains
+authoritative for UUID parsing and Unicode whitespace/control-character rules;
+the additional checks below are required even when a JSON Schema validator passes.
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Humaan project manifest version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "id", "name"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}
+```
+
+Humaan does not currently load or execute this JSON Schema. Do not add `$schema`
+to the project manifest itself: it would be an unknown field in version 1.
+
+## Discovery and Validation
+
+1. Canonicalize the starting directory and search it and its ancestors.
+2. Read the first `.humaan/project.json` found.
+3. Deserialize the required fields, rejecting unknown fields.
+4. Require version `1`, a parseable UUID, and a name whose trimmed value is nonempty
+   and whose characters contain no controls.
+5. Return that directory as the project root. Malformed metadata stops discovery.
+
+Initialization stages the manifest in the `.humaan` directory, flushes it, and
+publishes it without replacing an existing manifest.
+
+The implementation is in
+[`crates/engine/src/project.rs`](https://github.com/humaan-ai/humaan/blob/main/crates/engine/src/project.rs).
+
+## Versioning
+
+Adding description, defaults, paths, or configuration references requires a new
+manifest version and reader support. Existing version 1 readers reject these
+fields. Project versions do not imply recording or learning-set versions; each
+format evolves independently.
+
+See [Proposed project format](proposed-format.mdx) for the draft version 2 shape.

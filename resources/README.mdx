@@ -1,0 +1,66 @@
+---
+title: "Publishing Developer Resources"
+---
+
+# Publishing Developer Resources
+
+This folder contains developer resource pages for the Humaan website. It follows
+the same MDX, title frontmatter, and native Fumadocs navigation conventions as
+`/docs`.
+
+## Content and Navigation
+
+```text
+resources/
+├── index.mdx
+├── meta.json
+├── README.mdx
+├── changelog/
+│   ├── index.mdx
+│   └── meta.json
+├── sdks/
+│   ├── index.mdx
+│   └── meta.json
+├── cli/
+│   ├── index.mdx
+│   └── meta.json
+└── api/
+    ├── index.mdx
+    └── meta.json
+```
+
+Start at the [developer resources index](index.mdx). `meta.json` defines sidebar
+order; `README.mdx` is a repository publishing guide and is omitted from that
+sidebar. Each topic has its own folder containing `index.mdx` and `meta.json`.
+Fetch the full directory tree, including all `.mdx` pages and `meta.json` files.
+
+Assuming the website mounts this content at `/resources`, native file routes are:
+
+| Source | Route |
+| --- | --- |
+| `index.mdx` | `/resources` |
+| `changelog/index.mdx` | `/resources/changelog` |
+| `sdks/index.mdx` | `/resources/sdks` |
+| `cli/index.mdx` | `/resources/cli` |
+| `api/index.mdx` | `/resources/api` |
+
+The website's loader, mounting, and build configuration live outside this
+repository. These files do not deploy or configure the website.
+
+## Contributing
+
+Follow the shared
+[documentation contribution guide](https://github.com/humaan-ai/humaan/blob/main/docs/CONTRIBUTING.mdx).
+Keep resource links relative within this folder and use full URLs for references
+outside it, so the website can fetch this collection independently.
+
+Update the topic folder’s `meta.json` when adding a page, and the root `meta.json`
+when adding a topic. Update this route table when paths change. Keep
+availability claims grounded in the implementation and distinguish local
+interfaces from hosted services. Release notes are maintained in the CMS; keep
+`changelog/index.mdx` as a placeholder for the CMS changelog link instead of
+duplicating release entries here.
+
+Validate navigation entries, links, JSON examples, and MDX-sensitive syntax before
+submitting changes. Preview the pages through the website build when available;
+there is no resource-site build command configured in this repository.

@@ -1,0 +1,32 @@
+---
+title: "First robot experiment"
+---
+
+# First robot experiment
+
+Use this limited local workflow to move from a robot definition to an evaluated joint-feedback controller. You need Studio, an installed MuJoCo runtime, and a robot URDF with its referenced meshes and suitable physical properties.
+
+## Build and validate
+
+1. [Create a project](../projects/index.mdx).
+2. Open **Builder**, import the robot and meshes, and inspect links and joints.
+3. In **Configure**, supply missing mass, inertia, joint limits, and collision information. In **Test**, resolve validation findings.
+4. Save a robot version. Joint sliders preview kinematics; they do not run physics.
+
+## Simulate
+
+1. Open the saved version in **Simulation**.
+2. Set duration, gravity, and joint position targets, then run.
+3. Replay the result and inspect the motion. A completed simulation does not establish task success.
+
+## Train and evaluate
+
+1. Open **Experiences → Loops → Training experiments**.
+2. Create an Experience and Loop, then save an environment and a joint-reaching task.
+3. Save an experiment with the Builder version and training configuration.
+4. Choose **Local · MuJoCo**, launch training, and inspect the evaluation, baseline comparison, and replay.
+5. From a completed run, choose **Manage policy in Deployments** to preserve the candidate and its evidence.
+
+The current CEM trainer optimizes a joint-feedback controller for a fixed-base robot with 1–32 finite revolute/prismatic joints. It does not consume demonstration datasets or produce an image-based policy. Training does not guarantee improvement.
+
+Registering or assigning the policy does not execute it on physical hardware. Continue with [Experiences](../experiences/index.mdx) and [Deployments](../deployments/index.mdx) for the workflow boundaries.

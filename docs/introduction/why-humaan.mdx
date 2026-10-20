@@ -1,0 +1,54 @@
+---
+title: "Why Humaan"
+---
+
+# Why Humaan
+
+Improving a robot starts with understanding what happened. Observations and
+actions show part of an attempt; its task, outcome, and human assistance explain
+how that attempt should inform the next learning cycle.
+
+Humaan brings that context into a local workspace, where developers can inspect
+experiences, record judgments, and explain why particular examples belong in a
+learning set.
+
+## Preserve Experience and Context
+
+A recording should remain useful beyond its first playback. Developers need to
+know which robot and task it describes, which files belong to it, and whether
+those files have changed.
+
+Humaan recording manifests declare artifact paths, formats, byte sizes, and
+checksums. Human reviews live beside the recording, so reviewing an attempt does
+not rewrite its original artifacts. This preserves source data while allowing
+understanding of an experience to evolve.
+
+## Curate with a Learning Goal
+
+Collecting more data does not explain what a robot needs to learn. A learning set
+needs an objective and a reason for including each experience. A successful
+attempt may demonstrate a useful behavior; a failure may expose a limitation
+worth evaluating.
+
+Humaan keeps outcome, human assistance, and review state distinct. A reviewed
+experience can still have an unknown outcome. Including an experience in a
+learning set does not mean every recorded action should be imitated.
+
+## Keep Learning Decisions Traceable
+
+Reviews can change as people inspect an attempt more closely. A saved learning
+set pins the selected review revision and recording manifest, preserving the
+evidence used at curation time. Later edits do not silently change that selection.
+
+These local records support inspection and reproducibility. They are editable
+files, rather than a tamper-proof audit system.
+
+## Build Toward a Continuous Loop
+
+Humaan's direction connects experience, data preparation, training, evaluation,
+and deployment. Each cycle should make it possible to understand what changed
+and assess whether a robot's capability improved.
+
+The current alpha connects Builder, local simulation, recording review, and limited
+joint-feedback training. Physical execution and automatic feedback remain planned.
+Learn how these workflows fit together in [Core concepts](../core-concepts/index.mdx).

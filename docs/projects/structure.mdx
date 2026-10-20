@@ -1,0 +1,98 @@
+---
+title: "Project Structure"
+---
+
+# Project Structure
+
+Humaan stores project identity and application-managed data inside `.humaan`.
+Other files in the project root can hold source code, robot assets, and notes.
+Only the project manifest is needed to identify a project; other collections
+appear as their workflows are used.
+
+## Current Layout
+
+```text
+warehouse-robot/
+├── .humaan/
+│   ├── project.json
+│   ├── recordings/
+│   │   ├── .verification.json
+│   │   └── <experience-id>/
+│   │       ├── manifest.json
+│   │       ├── annotations.json
+│   │       └── ...declared artifacts
+│   ├── learning-sets/
+│   │   └── <learning-set-id>.json
+│   ├── builder/
+│   │   ├── versions/
+│   │   └── modules/
+│   ├── simulation/
+│   │   └── runs/
+│   ├── training/
+│   │   ├── tasks/
+│   │   ├── environments/
+│   │   ├── experiments/
+│   │   ├── runs/
+│   │   ├── experiences/
+│   │   ├── loops/
+│   │   ├── cloud-quotes/
+│   │   └── cloud-jobs/
+│   └── deployments/
+│       ├── robots/
+│       ├── sessions/
+│       ├── policies/
+│       └── policy-assignments/
+└── ...project-owned files
+```
+
+This tree lists storage locations supported by the code, not files created by
+initialization. `annotations.json` and `.verification.json` are optional.
+Desktop collections are evolving alpha implementation details; their locations
+do not establish a stable public interchange schema.
+
+## File Responsibilities
+
+| Path | Responsibility |
+| --- | --- |
+| `.humaan/project.json` | Project format version, stable UUID, and display name. |
+| `recordings/<id>/manifest.json` | Experience ID, robot and task strings, and declared artifact formats, sizes, and SHA-256 checksums. |
+| `recordings/<id>/…` | Original recording artifacts at the relative paths declared by the manifest. An `artifacts/` subfolder is not required. |
+| `recordings/<id>/annotations.json` | Mutable human review history, separate from checksummed recording artifacts. |
+| `recordings/.verification.json` | Saved desktop verification results and file metadata fingerprints. |
+| `learning-sets/<id>.json` | Immutable curation selection, reasons, manifest snapshots, and pinned review revisions. |
+| `builder/versions/`, `builder/modules/` | Saved Builder robot versions and reusable modules. |
+| `simulation/runs/` | Saved simulation run records. |
+| `training/` | Local task, environment, experiment, run, loop, experience, and cloud job metadata collections. |
+| `deployments/robots/`, `deployments/sessions/` | Local robot and session snapshots. |
+| `deployments/policies/`, `deployments/policy-assignments/` | Policy registry and assignment history. |
+
+Paths in this table after the first row are relative to `.humaan/`.
+Saved desktop collection entries generally use `<id>.json`; identifier rules
+depend on the collection. Do not assume every collection uses UUIDs.
+
+## Recording and Curation Contracts
+
+The [recording format reference](https://github.com/humaan-ai/humaan/blob/main/specs/recording-format/README.md) defines
+manifest validation, artifact integrity, and review revisions. The
+[learning-set format reference](https://github.com/humaan-ai/humaan/blob/main/specs/learning-set-format/README.md) defines
+curation snapshots and exports. These specifications remain the authority for
+their formats.
+
+Recording `robot` and `task` fields are strings in version 1. They do not currently
+resolve to robot or task configuration files. Learning sets select whole
+experiences; temporal segment selection is outside their current format.
+
+## Project Portability
+
+Preserve the relative layout of recording artifacts when moving a project.
+Recording manifests require portable relative paths and reject symbolic links
+for artifacts. A copied project retains the same project UUID; create a new
+project when you need a separate identity.
+
+Keep original recordings, annotations, and learning sets as persistent project
+data. Verification metadata can be regenerated through verification; its cached
+file fingerprints do not replace artifact checksum checks.
+
+See the [proposed project format](proposed-format.mdx) for a future separation of
+user-authored definitions, generated runs, and local workspace state. That layout
+requires implementation and migration before Humaan can load it.

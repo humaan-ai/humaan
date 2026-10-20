@@ -1,0 +1,66 @@
+---
+title: "Working with Projects"
+---
+
+# Working with Projects
+
+A Humaan project brings robot experiences and learning work into one local folder.
+Its identity stays the same when you move the folder, so saved learning sets can
+retain their connection to the project that created them.
+
+## Create a Project
+
+In Humaan Studio, choose **Create New** on the welcome screen or **File → New
+Project…**. Choose a name and parent directory. Studio creates a new project
+folder; open an existing folder rather than reusing it during creation.
+
+With the CLI installed, initialize a directory:
+
+```sh
+mkdir warehouse-robot
+cd warehouse-robot
+humaan project init "Warehouse Robot"
+humaan project show
+```
+
+Initialization writes `.humaan/project.json` in the current directory and preserves
+existing recordings. It refuses to overwrite an existing project manifest.
+
+## Open a Project
+
+Choose **Open Project** or **File → Open…** in Studio and select the project
+folder. In the CLI, run commands from the project directory or one of its
+subdirectories. Project discovery searches upward for the nearest
+`.humaan/project.json`. Invalid metadata produces an error instead of falling
+back to another project.
+
+Recording commands use the discovered project's `.humaan/recordings` directory.
+Without a project, they use `.humaan/recordings` under the current directory.
+The CLI's `--store` option overrides the recording store, but does not change
+project identity or the project commands.
+
+## Follow the Learning Loop
+
+Import recordings to preserve what the robot observed and did. Review outcomes
+and human assistance, then create a learning set with reasons for each selection.
+A saved learning set pins its selected review revisions and recording manifests;
+later reviews do not change that evidence.
+
+See [Project structure](structure.mdx) for storage locations and
+[Project schema](schema.mdx) for the identity contract. Recording and learning-set
+formats have separate versions from the project manifest.
+
+## Share a Project
+
+Copy the project folder, including `.humaan`, to retain its identity and local
+data. The leading dot makes this directory hidden in many file browsers.
+Copy while no Humaan process is writing to the project.
+
+For sharing selected experiences, use a full learning-set export. It includes the
+set and selected recordings. A manifest-only export contains references and review
+snapshots, without recording artifacts.
+
+Version control can track project identity and small configuration files. Choose
+an explicit storage policy for recordings and checkpoints, which can be large.
+Do not ignore all of `.humaan`: it contains original recordings and saved learning
+evidence as well as generated metadata. Keep credentials outside shared files.

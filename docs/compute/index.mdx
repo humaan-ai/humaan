@@ -1,0 +1,27 @@
+---
+title: "Compute"
+---
+
+# Compute
+
+Choose where to execute a saved training experiment. Local execution, an existing SSH host, and the initial RunPod integration have different setup and lifecycle requirements.
+
+| Option | Current scope |
+| --- | --- |
+| Local · MuJoCo | Run the joint-feedback trainer with the runtime installed through Settings → Tools. |
+| Cloud · SSH host | Run the same CPU workload on an existing host configured with SSH and the required Python environment. |
+| Cloud · provision RunPod GPU | Provision and monitor a remote job through Compute. The current trainer still runs on CPU. |
+
+## Start locally
+
+Use [First robot experiment](../introduction/first-experiment.mdx) to validate the robot, task, and environment before choosing remote execution.
+
+## Remote execution
+
+SSH execution requires a prepared host and a connected desktop while results return. RunPod provisioning requires a provider account, a session API key, and review of the job configuration and estimate. Retrieve results before terminating a pod; stopped pods can retain billable storage.
+
+Follow the [desktop compute setup guide](https://github.com/humaan-ai/humaan/blob/v0.0.1-alpha.2/apps/desktop/README.md#training-experiments-milestone-3) for prerequisites and lifecycle details. Keep cloud-job files containing worker access tokens out of shared project copies.
+
+## Boundaries
+
+The initial RunPod integration has not been validated with a live funded account. Provisioning a GPU does not accelerate the current CEM trainer. Isaac Sim, GPU-accelerated training, NVIDIA Brev, and live remote simulation streaming remain planned.

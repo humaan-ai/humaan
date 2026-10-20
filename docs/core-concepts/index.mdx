@@ -1,0 +1,34 @@
+---
+title: "Core concepts"
+---
+
+# Core concepts
+
+Humaan connects a versioned robot definition to learning work and its evidence. The platform workflow is **Experience → Loops → Runs → Results**.
+
+| Concept | Meaning |
+| --- | --- |
+| Project | A local workspace with a stable identity and related robot and learning data. |
+| Module | A reusable robot assembly or component. |
+| Embodiment | The complete robot configuration, including geometry, joints, physical properties, and configured interfaces. Builder saves robot versions. |
+| Experience | A learning context that brings together tasks, datasets, evaluations, and Loops. |
+| Loop | An improvement cycle within an Experience. |
+| Task | The objective and criteria used to evaluate behavior. Current training supports joint-reaching tasks. |
+| Experiment | A pinned robot snapshot, environment, task, and training configuration. |
+| Run | An execution of an experiment, preserving configuration and results. |
+| Recording | Original artifacts and a manifest describing a recorded attempt. |
+| Review | A revisioned human judgment about outcome, assistance, and review state. |
+| Learning set | An immutable selection of recordings with reasons and pinned review evidence. |
+| Policy | A controller or model with provenance and evaluation evidence. The current registry supports joint-feedback controllers. |
+
+## Experience and recording terminology
+
+Existing recording formats and some recording interfaces use “experience” for an individual recorded attempt, including its experience ID. This is distinct from the learning context selected in Training experiments. These docs do not rename fields or change existing format contracts.
+
+## Traceability and current boundaries
+
+Saved experiments pin their inputs, and registered policies preserve their source run. Recording reviews and learning sets preserve curation evidence separately from original artifacts.
+
+Dataset preparation exports data for an external learning workflow; the current CEM trainer does not consume learning sets. A local policy assignment records a selection, without executing it on hardware. Automatic deployment feedback into the next Loop remains planned.
+
+Start with [your first experiment](../introduction/first-experiment.mdx), or explore [recording and learning workflows](../experiences/index.mdx).

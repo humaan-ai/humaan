@@ -1,0 +1,152 @@
+---
+title: "Contributing to Documentation"
+---
+
+# Contributing to Documentation
+
+Help make Humaan easier to understand, build with, and improve. Documentation
+changes can clarify a concept, fix an example, explain an existing workflow, or
+describe a proposed format. Keep each change grounded in the behavior readers can
+use and the decisions they need to make.
+
+## Where Content Belongs
+
+Keep website documentation in `/docs` as `.mdx` files. Use the existing topic
+folders and add new folders when a subject needs its own group of pages.
+
+Developer references live in `/resources`, using the same MDX and Fumadocs
+conventions. Use that collection for changelog entries, SDK integration, CLI usage,
+and API contracts. Its `index.mdx`, `meta.json`, and `README.mdx` define the landing
+page, navigation order, and publishing guidance. Keep links within each collection
+relative and use full URLs when referencing another collection that may be fetched
+separately by the website. The writing and validation guidance below applies to both.
+
+| Location | Content |
+| --- | --- |
+| `introduction/` | Getting started, installation, first experiment, and motivation. |
+| `core-concepts/` | Modules, embodiments, Experiences, Loops, and policies. |
+| `projects/` | Project workflows and existing format-reference URLs. |
+| `builder/`, `simulation/` | Robot assembly, configuration, and physics workflows. |
+| `experiences/` | Recording review, learning sets, training, and evaluation. |
+| `deployments/` | Policy assignments, robot profiles, Live Link, and sessions. |
+| `compute/` | Local and remote execution with lifecycle boundaries. |
+| `reference/` | Entry point for supported formats and clearly marked proposals. |
+| `README.mdx` | Documentation index, page order, and suggested website routes. |
+| `CONTRIBUTING.mdx` | Contributor instructions for documentation changes. |
+| `meta.json` | Fumadocs sidebar order and folder labels, at the root and in each topic folder. |
+
+Detailed recording and learning-set specifications currently live under
+`/specs`. Link to those references rather than maintaining a second copy of the
+same contract. Application README files remain the place for application-specific
+setup and development commands.
+
+## Add or Update a Page
+
+1. Read related pages and the implementation or specification that defines the behavior.
+2. Update an existing page when it already answers the same reader need.
+3. For a new page, choose a descriptive lowercase filename with hyphens and a `.mdx` extension.
+4. Add the page's filename without `.mdx` to its folder's `meta.json` `pages` array, then update `README.mdx` and its route table.
+5. Link related pages so readers can move from concepts to workflows and references.
+6. Validate the content and links before opening a pull request.
+
+Use `index.mdx` for a topic's landing page. Keep existing filenames and routes
+stable when possible. If a rename is necessary, update incoming links and identify
+any website redirect needed in the pull request.
+
+## Writing Style
+
+Write for developers, roboticists, researchers, and makers. Explain the subject
+in plain language before introducing implementation details. Use Humaan's terms
+consistently with [Core concepts](core-concepts/index.mdx). Distinguish the learning
+context called Experience from the recording format’s existing experience ID. Use
+Available, Limited, Preview, and Planned status labels where capability boundaries matter.
+
+Start each page with one descriptive H1 and a short introduction explaining what
+the reader can understand or accomplish. Use H2 sections and H3 subsections to
+create a clear outline. Prefer short paragraphs; use lists for steps and tables
+for field definitions or comparisons.
+
+Describe supported behavior precisely. Keep current capabilities separate from
+future direction. Put design proposals on clearly marked pages, and state when
+examples cannot be loaded by current releases. Avoid describing a planned feature
+as an available workflow.
+
+## MDX Conventions
+
+Use standard Markdown headings, links, tables, and fenced code blocks within MDX.
+Leave blank lines around paragraphs, lists, tables, and code blocks. Add a language
+to code fences, such as `sh`, `json`, or `text`.
+
+Keep literal braces and angle-bracket placeholders inside code spans or fenced
+blocks so MDX does not interpret them as expressions or JSX. Avoid custom
+components, imports, HTML, or framework-specific metadata unless the website
+renderer explicitly supports them.
+
+Add YAML frontmatter with a `title` to each page so Fumadocs can label navigation
+items. Keep the title consistent with the page's H1. Navigation uses the native
+`meta.json` format: `title` labels folders, `pages` controls order, and
+`defaultOpen` expands a section initially. Entries use case-sensitive filenames
+without extensions or child folder names. Native link entries such as
+`[Project schema](/docs/projects/schema)` can place an existing page in another
+section without changing its URL. Pages omitted from an explicit `pages`
+array are excluded from the sidebar. Add new topic folders to the root metadata
+and include a `meta.json` inside each folder. Do not set `root: true` on ordinary
+sections, because that changes which sections are visible together.
+
+Keep page content independent of the site's layout. The website provides its
+navigation, breadcrumbs, and page chrome; do not reproduce them in page bodies.
+
+## Links and Examples
+
+Use relative `.mdx` links between pages inside `/docs`, such as
+`[Project schema](projects/schema.mdx)` from the docs index. Use descriptive link
+labels and verify any heading anchors after changing section names.
+
+For implementation and specification references outside `/docs`, use full GitHub
+links so a website that fetches only this folder can still resolve them. Prefer a
+commit permalink when a claim depends on an exact implementation revision.
+
+Keep JSON examples valid, with quoted keys and no comments or trailing commas.
+Explain placeholders in surrounding prose. Show commands from a stated working
+directory and describe prerequisites or side effects that affect the workflow.
+Use synthetic data and placeholder credentials in examples.
+
+## Documenting Schemas
+
+Include a minimal valid example and a field table covering types, required fields,
+defaults, and validation constraints. Describe how references and paths resolve,
+how unknown fields are handled, and which versions readers accept.
+
+Verify schema claims against runtime validation. If a JSON Schema example covers
+only part of the runtime contract, state the remaining checks beside it. Do not
+add fields to a current-format example when current readers reject them.
+
+Explain compatibility and migration requirements when proposing a format change.
+Keep project, recording, review, and learning-set versions distinct.
+
+## Validate a Change
+
+Before submitting a pull request:
+
+- Check that the page has one H1 and a readable heading outline.
+- Confirm file paths, commands, fields, and capability claims against their sources.
+- Follow local links and verify heading anchors and external references.
+- Parse JSON examples and check MDX-sensitive characters outside code blocks.
+- Parse every `meta.json` as JSON and check that its page and folder entries exist.
+- Update navigation metadata, the index, and route table for added, renamed, or removed pages.
+- Run `git diff --check` for whitespace errors.
+
+There is no documentation compiler or preview command configured in this
+repository. These checks do not replace an MDX build. When the website integration
+is available, build or preview the changed pages there and check tables, code
+blocks, links, and navigation. State in the pull request if that preview was
+unavailable.
+
+## Submit a Pull Request
+
+Describe the reader problem and how the final content solves it. Include changed
+routes, compatibility implications, and validation results where relevant. For a
+behavior change, update the documentation alongside the implementation so readers
+can distinguish released behavior from proposed work.
+
+Return to the [documentation index](README.mdx) for the current page organization.

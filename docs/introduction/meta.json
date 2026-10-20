@@ -1,0 +1,10 @@
+{
+  "title": "Getting started",
+  "defaultOpen": true,
+  "pages": [
+    "index",
+    "installation",
+    "first-experiment",
+    "why-humaan"
+  ]
+}

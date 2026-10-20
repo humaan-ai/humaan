@@ -1,0 +1,25 @@
+---
+title: "Builder"
+---
+
+# Builder
+
+Builder assembles and configures robots for versioned experiments. Work through **Assemble → Configure → Test**, then save a version for downstream workflows.
+
+## Assemble and configure
+
+Import a URDF with its meshes, inspect links and joints, and work with reusable modules. Configure physical properties, joint limits, sensors, and hardware mappings explicitly; a visual model alone is not a complete simulation definition.
+
+## Test and save
+
+Test provides structural and simulation preflight findings. Resolve affected components in Configure. Joint sliders provide a kinematic preview; use [Simulation](../simulation/index.mdx) for physics.
+
+Save a version before running simulation or creating a training experiment. Experiments preserve their pinned robot snapshot rather than following later edits.
+
+## Boundaries
+
+URDF import supports fixed, revolute, continuous, and prismatic joints. Expand Xacro before import. Configuring sensors or hardware mappings does not establish simulated sensor support or physical control. The Catalog is currently empty; browsing and downloads are not connected yet.
+
+Mimic joints are preserved during import, saving, and module reuse. In Test, a mimic joint follows its source joint using the imported multiplier and offset; it has no independent slider. This supports coupled gripper previews such as SO-ARM-102. Simulation and training with mimic joints remain unsupported and are blocked.
+
+Follow [First robot experiment](../introduction/first-experiment.mdx) for the complete local workflow.

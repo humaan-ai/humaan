@@ -1,0 +1,14 @@
+{
+  "title": "Assembly Guides",
+  "pages": [
+    "introduction",
+    "core-concepts",
+    "projects",
+    "builder",
+    "simulation",
+    "experiences",
+    "deployments",
+    "compute",
+    "reference"
+  ]
+}

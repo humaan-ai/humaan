@@ -1,0 +1,27 @@
+---
+title: "Experiences"
+---
+
+# Experiences
+
+Experiences organizes recording evidence and learning work. Training follows **Experience → Loops → Runs → Results**; see [Core concepts](../core-concepts/index.mdx) for the distinction between a learning context and a recorded attempt.
+
+## Recordings and reviews
+
+Import a supported Humaan recording or complete LeRobot v3.0 dataset. Verify artifacts, inspect attempts, and record outcome, assistance, and review state separately. Reviews preserve history without rewriting original recording artifacts.
+
+## Learning sets and dataset preparation
+
+Under **Loops → Learning sets**, select recordings for a stated goal and explain each inclusion. Saved sets pin recording manifests and review revisions. Full exports include selected recordings; manifest-only exports retain references and review snapshots.
+
+Dataset preparation exports eligible data with train/validation assignments and source mappings. Inspect exclusions and the preparation report before using an export. Preparation does not launch training.
+
+## Training and evaluation
+
+Under **Loops → Training experiments**, create an Experience and Loop, save a task and environment, then pin a Builder version and training configuration in an experiment. Choose [local or remote compute](../compute/index.mdx) when launching.
+
+The current CEM trainer optimizes a joint-feedback controller and evaluates it against a baseline on separate fixed starting states. Inspect metrics and replay before registering a candidate in [Deployments](../deployments/index.mdx).
+
+## Boundaries
+
+The current trainer does not consume demonstrations or learning sets. Image-based policy training, Dataset Passport compatibility checks, and automatic deployment-session ingestion into a Loop remain planned. Simulation evaluation does not establish physical performance.

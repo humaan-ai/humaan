@@ -1,0 +1,76 @@
+---
+title: "API"
+---
+
+# API
+
+Humaan currently exposes local integration surfaces through CLI JSON output,
+versioned files, and the Rust engine. This repository does not define a public
+hosted REST API, API-key flow, or HTTP endpoint contract.
+
+## CLI JSON Contract
+
+Add `--json` to a supported command and capture stdout separately from stderr.
+
+| Command | JSON result |
+| --- | --- |
+| `project init`, `project show` | Object with `project` and `root`. |
+| `import`, `list`, `export` | Array of recording manifests, including for a single result. |
+| `inspect` | Array containing the manifest; a LeRobot recording can also include a `source` provenance object. |
+| `verify` | Array containing `id`, `valid`, and `error` for failed entries. The error field is omitted for valid entries. |
+
+A successful verification entry has this shape:
+
+```json
+[
+  {
+    "id": "warehouse-attempt-001",
+    "valid": true
+  }
+]
+```
+
+A failed entry includes a diagnostic string in `error`. Do not classify failures
+by matching its wording. A verification report with failed entries exits with
+code `1`; an error that prevents the operation from producing a report can instead
+leave stdout empty. Check process status and output together.
+
+## File Contracts
+
+| Contract | Responsibility |
+| --- | --- |
+| Project manifest | Project identity and format version. |
+| Recording manifest | Experience metadata and checksummed artifact declarations. |
+| Annotations | Human outcome reviews and their revision history. |
+| Learning set | Immutable experience selection and pinned curation evidence. |
+
+Read the
+[project schema](https://github.com/humaan-ai/humaan/blob/main/docs/projects/schema.mdx),
+[recording and annotation specification](https://github.com/humaan-ai/humaan/blob/main/specs/recording-format/README.md),
+and [learning-set specification](https://github.com/humaan-ai/humaan/blob/main/specs/learning-set-format/README.md)
+before producing or consuming those files. Each format has its own version.
+Artifact paths resolve relative to the recording directory, rather than the
+project root.
+
+## Rust Engine Entry Points
+
+| Entry point | Responsibility |
+| --- | --- |
+| `project::init`, `project::discover`, `project::store` | Initialize and locate project identity and recording storage. |
+| `import_recordings` | Detect and import supported source recordings. |
+| `inspect`, `inspect_experience` | Validate a recording directory or a stored experience. |
+| `list`, `verify` | List verified experiences or collect per-entry verification results. |
+| `list_metadata`, `experience_metadata` | Read manifest metadata without establishing artifact integrity. |
+| `export` | Verify and copy a recording to a new destination. |
+| `annotations` module | Read and save revisioned human reviews. |
+| `learning_sets` module | Create, list, and export curated learning sets. |
+
+See [SDKs](../sdks/index.mdx) for local crate integration and generated Rust documentation.
+Desktop Tauri commands are application implementation details, rather than a
+separate public service API.
+
+## Compatibility
+
+Pin the CLI or engine revision used by automation. Validate required fields and
+supported format versions, preserve artifact bytes, and keep errors visible to
+callers. Review release notes and the [changelog](../changelog/index.mdx) before upgrading.

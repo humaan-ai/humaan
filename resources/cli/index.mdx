@@ -1,0 +1,88 @@
+---
+title: "CLI"
+---
+
+# CLI
+
+Humaan CLI manages robot recordings locally. Use it to initialize projects,
+import experiences, inspect and verify artifacts, and export original files.
+These operations require no cloud account or local server.
+
+## Install from Source
+
+Install a Rust toolchain that supports the repository's Rust 2024 crates. From
+the repository root, run:
+
+```sh
+cargo install --path apps/cli --locked
+humaan --version
+humaan --help
+```
+
+Ensure Cargo's binary directory is on your `PATH`.
+
+## Create a Project and Import Data
+
+```sh
+mkdir warehouse-robot
+cd warehouse-robot
+humaan project init "Warehouse Robot"
+humaan project show
+humaan import /path/to/recording
+humaan list
+```
+
+Replace the import path with a Humaan recording directory or a complete LeRobot
+v3.0 dataset. Initialization writes `.humaan/project.json` in the current folder.
+Recording commands discover the nearest project and use its `.humaan/recordings`
+store. Without project metadata, the store defaults to the current directory's
+`.humaan/recordings` folder.
+
+## Command Reference
+
+| Command | Responsibility |
+| --- | --- |
+| `humaan project init NAME` | Initialize the current directory without replacing an existing project manifest. |
+| `humaan project show` | Display the nearest project's identity and root directory. |
+| `humaan import SOURCE` | Import supported recordings and verify their declared artifacts. |
+| `humaan list` | List experiences and verify their artifacts. |
+| `humaan inspect ID` | Inspect one experience and verify its artifacts. |
+| `humaan verify` | Report per-entry verification results, including damaged recordings. |
+| `humaan export ID DESTINATION` | Copy an experience into a new destination directory. |
+
+Use the experience ID returned by import or list for `ID`, rather than the project
+UUID. Export takes the exact destination directory to create:
+
+```sh
+humaan inspect EXPERIENCE_ID --json
+humaan verify --json
+humaan export EXPERIENCE_ID ./exported-recording
+```
+
+Existing import IDs and export destinations are never overwritten. `list` reads
+artifact payloads for verification; use `verify` when damaged entries prevent a
+complete listing.
+
+## Global Options
+
+| Option | Behavior |
+| --- | --- |
+| `--json` | Emit machine-readable command results on stdout. |
+| `--store PATH` | Override recording storage for recording commands. Project commands ignore it. |
+| `--help` | Show command usage. |
+| `--version` | Show the installed CLI version. |
+
+Interactive recording operations show an activity indicator. JSON mode disables
+it; progress animation is also disabled when stderr is redirected.
+
+## Exit Codes and Automation
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Command succeeded; for verification, all entries passed, including an empty store. |
+| `1` | Operation failed, or verification found one or more invalid entries. |
+| `2` | Command-line argument parsing failed. |
+
+Errors are written to stderr. Verification can emit a JSON results array and exit
+with code `1` when individual entries fail. Treat that output as a report rather
+than discarding it. See [API](../api/index.mdx) for result shapes.

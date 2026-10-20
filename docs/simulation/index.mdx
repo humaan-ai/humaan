@@ -1,0 +1,19 @@
+---
+title: "Simulation"
+---
+
+# Simulation
+
+Simulation runs physics against a saved Builder robot version and preserves the result for replay. This is a **Limited** local MuJoCo workflow.
+
+## Run a saved version
+
+Install MuJoCo through **Settings → Tools**, save a [Builder](../builder/index.mdx) version, and resolve preflight errors. Open that version in Simulation, choose duration, gravity, and position targets, then run. Playback becomes available after computation finishes.
+
+Saved runs retain the robot snapshot, configuration, and result. Later Builder changes do not rewrite previous runs.
+
+## Boundaries
+
+The initial environment uses a fixed root and a floor. Runs last at most 10 simulated seconds. Mesh contacts use convex hulls; sensors and free mobile bases are not simulated. Hardware velocity limits are not enforced.
+
+A completed run establishes physics execution, not task success or physical hardware readiness. For joint-reaching tasks and controller evaluation, continue to [Experiences](../experiences/index.mdx).
