@@ -1,0 +1,102 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@custom-variant dark (&:is(.dark *));
+
+/* VS Code modern dark workbench surfaces. */
+@theme {
+  --color-primary: #4c9df3;
+  --color-primary-foreground: #101820;
+  --color-secondary: #252526;
+  --color-secondary-foreground: #f0f0f0;
+  --color-muted-foreground: #9d9d9d;
+  --color-popover: #1f1f1f;
+  --color-popover-foreground: #f0f0f0bd;
+  --color-input: #313131;
+  --color-ring: #4c9df3;
+  --color-destructive: #bf616a;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --color-background: #1f1f1f; /* editor.background */
+  --color-surface: #181818; /* sideBar / titleBar / statusBar */
+  --color-raised: #252526; /* input / dropdown background */
+  --color-border: #ffffff12; /* sideBar / statusBar / panel borders */
+  --color-border-strong: #313131; /* input / dropdown / widget borders */
+
+  --color-title: #f0f0f0;
+  --color-foreground: #f0f0f0bd;
+  --color-muted: #9d9d9d;
+
+  --color-accent: #4c9df3; /* buttons, focus ring, badges, links */
+  --color-accent-hover: #66aefa;
+  --color-link: #4c9df3;
+
+  --color-selection: #343434; /* editor selection background */
+  --color-hover: #2a2a2a99; /* list hover background */
+
+  --color-error: #bf616a; /* Nord red */
+  --color-warning: #ebcb8b; /* Nord yellow */
+  --color-success: #a3be8c; /* Nord green */
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, ui-sans-serif, system-ui,
+    sans-serif;
+  --font-mono: "SF Mono", Monaco, Menlo, Consolas, ui-monospace, monospace;
+}
+
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  /* Custom scrollbar styling to match VS Code / Cursor dark mode */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #40404055;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #40404088;
+  }
+
+  ::-webkit-scrollbar-thumb:active {
+    background: #60606088;
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply text-title;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  select,
+  input[type="checkbox"],
+  input[type="range"] {
+    cursor: pointer;
+  }
+}
+
+@layer components {
+  .workbench-panel {
+    border: 1px solid var(--color-border-strong);
+    border-radius: 10px;
+    background: var(--color-background);
+  }
+}
