@@ -12,6 +12,7 @@ test('review cost, launch, reconnect, retrieve results and confirm compute clean
       if (command === 'experience_list') return { records: [], warning: null };
       if (command === 'experience_reviews') return {};
       if (['learning_set_list', 'simulation_list', 'builder_list'].includes(command)) return [];
+      if (command === 'builder_project') return { activeRobotId: null, robots: [] };
       if (command === 'simulation_tools_status') return { ready: false, installing: false, phase: 'Not installed' };
       if (command === 'training_catalog') return { experiences: [], loops: [], tasks: [], environments: [], experiments: [{ id: '123', name: 'Reach arm', robotName: 'Arm' }], runs: [] };
       if (command === 'cloud_connect') return { accountId: 'runpod-account', gpus: [{ id: 'NVIDIA RTX A6000', displayName: 'RTX A6000', memoryInGb: 48, secureCloud: true }] };

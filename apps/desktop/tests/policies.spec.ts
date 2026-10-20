@@ -14,6 +14,7 @@ test('policies register controllers, block incompatible assignments, restore his
       if (command === 'experience_list') return { records: [], warning: null };
       if (command === 'experience_reviews') return {};
       if (['builder_list','learning_set_list','simulation_list'].includes(command)) return [];
+      if (command === 'builder_project') return { activeRobotId: null, robots: [] };
       if (command === 'simulation_tools_status') return { ready: false, installing: false, phase: 'Not installed' };
       if (command === 'deployment_list') return args.kind === 'robots' ? [{ id: 'robot', name: 'SO-101 bench' },{ id: 'wrong', name: 'Different robot' }] : [];
       if (command === 'policy_list') return policies;

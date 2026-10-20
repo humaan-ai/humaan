@@ -3,6 +3,7 @@
   import { invoke } from '@tauri-apps/api/core';
   import { studio, type LocalProject, type StudioView } from '$lib/studio.svelte';
   import type { Robot, SavedVersion } from '$lib/builder/model';
+  import { loadProjectUrdf, type ProjectRobots, type RobotDraft } from '$lib/builder/project';
   import type { RunSummary } from '$lib/simulation/model';
   import RobotArm from './icons/RobotArm.svelte';
   import PartThumbnail from './PartThumbnail.svelte';
@@ -22,9 +23,16 @@
   let { project, onnavigate }: { project: LocalProject; onnavigate: (section: 'files' | 'assets') => void } = $props();
   type SessionSummary = { id: string; name: string; createdAt: number };
   let versions = $state<SavedVersion[] | null>(null), runs = $state<RunSummary[] | null>(null), sessions = $state<SessionSummary[] | null>(null);
-  let loading = $state(true), errors = $state<string[]>([]), revision = $state(0);
+  let robots = $state<ProjectRobots | null>(null);
+  let loading = $state(true), openingRobot = $state(false), errors = $state<string[]>([]), revision = $state(0);
   let request = 0;
   const latest = $derived(versions?.[0]);
+  const featuredRobot = $derived(robots?.activeRobotId === 'legacy' && versions?.some(version => !version.robotId) ? undefined
+    : robots?.robots.find(robot => robot.id === robots?.activeRobotId) || robots?.robots[0]);
+  const featuredVersion = $derived(featuredRobot
+    ? versions?.find(version => version.robotId === featuredRobot.id)
+    : robots?.activeRobotId === 'legacy' ? versions?.find(version => !version.robotId) : latest);
+  const featuredName = $derived(featuredRobot?.name || featuredVersion?.name);
   const activity = $derived([
     ...(versions || []).map(v => ({ key: `version-${v.id}`, name: v.name, time: v.savedAt, label: 'Robot version saved', kind: 'version' })),
     ...(runs || []).map(r => ({ key: `run-${r.id}`, name: r.name, time: r.createdAt, label: r.status === 'failed' ? 'Simulation failed' : 'Simulation completed', kind: r.status })),
@@ -42,19 +50,41 @@
     const results = await Promise.allSettled([
       invoke<SavedVersion[]>('builder_list', { root: project.root, kind: 'versions' }),
       invoke<RunSummary[]>('simulation_list', { root: project.root }),
-      invoke<SessionSummary[]>('deployment_list', { root: project.root, kind: 'sessions' })
+      invoke<SessionSummary[]>('deployment_list', { root: project.root, kind: 'sessions' }),
+      invoke<ProjectRobots>('builder_project', { root: project.root })
     ]);
     if (current !== request) return;
-    const [v, r, s] = results;
+    const [v, r, s, p] = results;
     versions = v.status === 'fulfilled' ? v.value.toSorted((a,b) => b.savedAt - a.savedAt) : null;
     runs = r.status === 'fulfilled' ? r.value : null;
     sessions = s.status === 'fulfilled' ? s.value : null;
-    errors = results.flatMap((result, index) => result.status === 'rejected' ? [`${['Robot versions', 'Simulation runs', 'Live Link sessions'][index]}: ${String(result.reason)}`] : []);
+    robots = p.status === 'fulfilled' ? p.value : null;
+    errors = results.flatMap((result, index) => result.status === 'rejected' ? [`${['Robot versions', 'Simulation runs', 'Live Link sessions', 'Project robots'][index]}: ${String(result.reason)}`] : []);
     loading = false; revision++;
   }
   $effect(() => { project.root; if (studio.activeView === 'project') untrack(() => { void refresh(); }); });
   onDestroy(() => request++);
   function date(value: number) { return new Date(value).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+  async function loadFeaturedRobot(): Promise<Robot> {
+    const root = project.root, entry = featuredRobot, version = featuredVersion;
+    if (entry) {
+      const draft = await invoke<RobotDraft | null>('builder_draft_load', { root, id: entry.id });
+      if (draft) return draft.robot;
+    }
+    if (version) return invoke<Robot>('builder_load', { root, kind: 'versions', id: version.id });
+    if (entry?.source && !entry.missing) return (await loadProjectUrdf(root, entry.source)).robot;
+    throw new Error('Robot source is unavailable.');
+  }
+  async function continueInBuilder() {
+    openingRobot = true;
+    try {
+      if (featuredRobot && robots?.activeRobotId !== featuredRobot.id) {
+        await invoke('builder_activate_robot', { root: project.root, id: featuredRobot.id });
+      }
+      open('builder');
+    } catch (cause) { errors = [...errors, `Cannot open robot: ${String(cause)}`]; }
+    finally { openingRobot = false; }
+  }
 </script>
 
 <div class="overview min-h-0 flex-1 overflow-auto" aria-label="Project overview" aria-busy={loading}>
@@ -73,9 +103,17 @@
       <div class="min-w-0">
         <section class="overflow-hidden rounded-lg border border-border bg-[#1b1b1b]" aria-label="Current robot">
           <div class="grid @min-[600px]:grid-cols-[minmax(0,1fr)_220px]">
-            <div class="flex flex-col items-start p-5"><span class="text-[10px] font-medium uppercase tracking-widest text-muted">{latest ? 'Latest saved robot' : 'Start building'}</span><h3 class="mt-3 break-words text-lg font-medium text-title">{loading ? 'Loading your project…' : latest?.name || (versions === null ? 'Your robot workspace' : 'Give your robot a starting point')}</h3><p class="mb-5 mt-2 text-xs leading-relaxed text-muted">{latest ? `${latest.links} links · Saved ${date(latest.savedAt)}` : versions === null ? 'Open Builder to inspect your assembly and saved versions.' : 'Import a URDF and its meshes, or assemble a robot from reusable modules.'}</p><Button class="mt-auto" onclick={() => open('builder')}><Box size={14} />{latest ? 'Continue in Builder' : 'Open Builder'}<ArrowRight size={14} /></Button></div>
+            <div class="flex min-w-0 flex-col items-start p-5">
+              <span class="text-[10px] font-medium uppercase tracking-widest text-muted">{featuredRobot ? 'Project robot' : featuredVersion ? 'Latest saved robot' : 'Start building'}</span>
+              <h3 class="mt-3 break-words text-lg font-medium text-title">{loading ? 'Loading your project…' : featuredName || (versions === null ? 'Your robot workspace' : 'Give your robot a starting point')}</h3>
+              {#if featuredRobot?.source}<p class="mt-2 w-full truncate font-mono text-[10px] text-muted" title={featuredRobot.source}>{featuredRobot.source}</p>{/if}
+              <p class="mb-5 mt-2 text-xs leading-relaxed text-muted">{featuredRobot
+                ? `${robots!.robots.length} ${robots!.robots.length === 1 ? 'robot' : 'robots'} in this project. ${featuredRobot.missing ? 'Source missing; showing a saved draft or version when available.' : 'Open Builder to edit this robot or choose another.'}`
+                : featuredVersion ? `${featuredVersion.links} links · Saved ${date(featuredVersion.savedAt)}` : versions === null ? 'Open Builder to inspect your assembly and saved versions.' : 'Add a robot or place a URDF and its meshes in robots/.'}</p>
+              <Button class="mt-auto" disabled={loading || openingRobot} onclick={continueInBuilder}><Box size={14} />{featuredName ? 'Continue in Builder' : 'Open Builder'}<ArrowRight size={14} /></Button>
+            </div>
             <div class="flex min-h-44 items-center justify-center border-t border-border bg-[#181818] @min-[600px]:border-l @min-[600px]:border-t-0">
-              {#if latest}{#key `${latest.id}-${revision}`}<PartThumbnail name={latest.name} load={() => invoke<Robot>('builder_load', { root: project.root, kind: 'versions', id: latest!.id })} />{/key}{:else}<div class="flex h-28 w-28 items-center justify-center rounded-full border border-[#303030] bg-[#1d1d1d]"><RobotArm size={56} strokeWidth={1} class="text-[#737373]" /></div>{/if}
+              {#if featuredName}{#key `${project.root}-${featuredRobot?.id || featuredVersion?.id}-${revision}`}<PartThumbnail name={featuredName} load={loadFeaturedRobot} />{/key}{:else}<div class="flex h-28 w-28 items-center justify-center rounded-full border border-[#303030] bg-[#1d1d1d]"><RobotArm size={56} strokeWidth={1} class="text-[#737373]" /></div>{/if}
             </div>
           </div>
         </section>

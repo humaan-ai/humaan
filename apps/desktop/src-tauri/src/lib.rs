@@ -1,4 +1,5 @@
 mod builder;
+mod builder_project;
 mod deployments;
 mod policies;
 mod cloud;
@@ -129,6 +130,14 @@ pub fn run() {
             deployments::deployment_save,
             deployments::deployment_sample,
             builder::builder_list,
+            builder_project::builder_project,
+            builder_project::builder_add_robot,
+            builder_project::builder_import_robot,
+            builder_project::builder_draft_load,
+            builder_project::builder_draft_save,
+            builder_project::builder_activate_robot,
+            builder_project::builder_robot_files,
+            builder_project::builder_read_robot_file,
             builder::builder_load,
             builder::builder_save,
             builder::builder_delete_version,

@@ -1,5 +1,43 @@
 import { test, expect } from '@playwright/test';
 
+test('overview previews project URDFs before any Builder version is saved', async ({ page }) => {
+  await page.addInitScript(() => {
+    const source = 'robots/SO101/camera.urdf';
+    const xml = '<robot name="Camera arm"><link name="base"><visual><geometry><box size=".3 .2 .4"/></geometry></visual></link></robot>';
+    (window as any).__TAURI_INTERNALS__ = { transformCallback: () => 1, unregisterCallback: () => {}, invoke: async (command: string, args: any) => {
+      if (command.startsWith('plugin:event|')) return 1;
+      if (command === 'select_directory') return '/workspace/pick-and-place';
+      if (command === 'experience_project') return { root: '/workspace/pick-and-place', project: { id: 'urdf-project', name: 'Pick and place' } };
+      if (command === 'experience_list') return { records: [], warning: null };
+      if (command === 'experience_reviews') return {};
+      if (['learning_set_list', 'builder_list', 'simulation_list', 'deployment_list'].includes(command)) return [];
+      if (command === 'builder_project') return {
+        activeRobotId: 'camera',
+        robots: [
+          { id: 'arm', name: 'Base arm', source: 'robots/SO101/arm.urdf', missing: false },
+          { id: 'camera', name: 'Camera arm', source, missing: false },
+        ],
+      };
+      if (command === 'builder_draft_load') return null;
+      if (command === 'builder_robot_files') return [{ path: source, size: xml.length }];
+      if (command === 'builder_read_robot_file') {
+        if (args.path !== source) throw new Error('Unexpected URDF preview.');
+        return Array.from(new TextEncoder().encode(xml));
+      }
+      throw new Error('Unexpected IPC ' + command);
+    } };
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Open project', exact: true }).click();
+  const current = page.getByRole('region', { name: 'Current robot', exact: true });
+  await expect(current.getByRole('heading', { name: 'Camera arm', exact: true })).toBeVisible();
+  await expect(current.getByRole('img', { name: '3D preview of Camera arm', exact: true })).toBeVisible();
+  await expect(current).toContainText('robots/SO101/camera.urdf');
+  await expect(current).toContainText('2 robots in this project.');
+  await expect(page.getByRole('button', { name: '0 Robot versions', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Give your robot a starting point' })).toHaveCount(0);
+});
+
 test('overview shows real saved activity, refresh failures, and workflow navigation', async ({ page }) => {
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
   await page.addInitScript(() => {
@@ -16,6 +54,9 @@ test('overview shows real saved activity, refresh failures, and workflow navigat
       if (command === 'experience_list') return { records: [], warning: null };
       if (command === 'experience_reviews') return {};
       if (command === 'learning_set_list') return [];
+      if (command === 'builder_project') return { activeRobotId: null, robots: [] };
+      if (command === 'builder_draft_load') return null;
+      if (['builder_activate_robot', 'builder_draft_save'].includes(command)) return;
       if (command === 'builder_list') return [{ id: '1-2', name: 'Inspection arm · v2', links: 6, savedAt: 1780000000000 }];
       if (command === 'builder_load') return robot;
       if (command === 'simulation_tools_status') return { ready: false, installing: false, phase: 'Not installed' };

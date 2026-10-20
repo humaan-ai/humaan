@@ -13,11 +13,13 @@
   import StudioSidebar from './StudioSidebar.svelte';
   import WorkspaceColumn from './WorkspaceColumn.svelte';
   import PartThumbnail from './PartThumbnail.svelte';
+  import RobotPicker from './RobotPicker.svelte';
   import BuilderViewport from './BuilderViewport.svelte';
   import BuilderInspector from './BuilderInspector.svelte';
   import { emptyRobot, roots, attach, clone, removeLink, validate, type Robot, type SavedVersion } from '$lib/builder/model';
   import { simulationChecks } from '$lib/simulation/model';
   import { importUrdf } from '$lib/builder/urdf';
+  import { importedPath, loadProjectUrdf, prepareRobotImport, type ProjectRobot, type ProjectRobots, type RobotDraft } from '$lib/builder/project';
   import Wrench from '@lucide/svelte/icons/wrench';
   import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
   import Play from '@lucide/svelte/icons/play';
@@ -68,7 +70,19 @@
     if (name) robot.name = name;
     editingName = false;
   }
-  let versions = $state<SavedVersion[]>([]), modules = $state<SavedVersion[]>([]);
+  let allVersions = $state<SavedVersion[]>([]), modules = $state<SavedVersion[]>([]);
+  let projectRobots = $state<ProjectRobot[]>([]);
+  let activeRobotId = $state('');
+  const versions = $derived(allVersions.filter(version => (version.robotId || 'legacy') === activeRobotId));
+  const activeProjectRobot = $derived(projectRobots.find(entry => entry.id === activeRobotId));
+  let robotPickerOpen = $state(false), pickedRobotId = $state('');
+  const robotEntries = $derived([
+    ...projectRobots.map(entry => ({ id: entry.id, name: entry.source?.split('/').at(-1) || entry.name, path: entry.source || '', missing: entry.missing })),
+    ...(allVersions.some(version => !version.robotId) || (activeRobotId === 'legacy' && robot.links.length)
+      ? [{ id: 'legacy', name: 'Existing project assembly', path: '', missing: false }] : []),
+  ]);
+  let draftError = $state('');
+  let draftQueue = Promise.resolve();
   let assemblyOpen = $state(true), partsOpen = $state(false);
   let section = $state<'Assembly' | 'Parts' | 'Catalog'>('Assembly');
   function openCatalog() { section = 'Catalog'; }
@@ -115,6 +129,8 @@
   let filesInput: HTMLInputElement, folderInput: HTMLInputElement;
   let importFiles = $state<File[]>([]), chosenUrdf = $state(''), importOpen = $state(false);
   let importError = $state('');
+  let destinationName = $state('');
+  let createOpen = $state(false), createName = $state(''), createError = $state('');
   let confirmOpen = $state(false), confirmTitle = $state(''), confirmText = $state('');
   let pending: (() => void | Promise<void>) | null = null;
   const dirty = $derived(JSON.stringify(robot) !== saved);
@@ -128,7 +144,95 @@
   $effect(() => { if (moduleRoot && !moduleRoot.mounts.some(m => m.name === childMount)) childMount = moduleRoot.mounts[0]?.name || ''; });
   async function work(operation: () => Promise<void>) { if (busy) return; busy = true; error = ''; try { await operation(); } catch (cause) { error = String(cause); } finally { busy = false; } }
   async function refresh() {
-    [versions, modules] = await Promise.all([invoke<SavedVersion[]>('builder_list', { root, kind: 'versions' }), invoke<SavedVersion[]>('builder_list', { root, kind: 'modules' })]);
+    [allVersions, modules] = await Promise.all([invoke<SavedVersion[]>('builder_list', { root, kind: 'versions' }), invoke<SavedVersion[]>('builder_list', { root, kind: 'modules' })]);
+  }
+  function draft(): RobotDraft { return clone({ robot, saved, currentVersion, selected, positions, warnings }); }
+  function persistDraft(id = activeRobotId, value = draft()) {
+    if (!id) return Promise.resolve();
+    const task = draftQueue.then(async () => {
+      await invoke<void>('builder_draft_save', { root, id, draft: value });
+      projectRobots = projectRobots.map(entry => entry.id === id && entry.name !== value.robot.name ? { ...entry, name: value.robot.name } : entry);
+    });
+    draftQueue = task.catch(() => {});
+    return task;
+  }
+  $effect(() => {
+    if (busy || !activeRobotId) return;
+    const id = activeRobotId, value = draft();
+    const timer = setTimeout(() => {
+      void persistDraft(id, value).then(() => { draftError = ''; }).catch(cause => { draftError = `Could not save draft: ${cause}`; });
+    }, 600);
+    return () => clearTimeout(timer);
+  });
+  async function openRobot(id: string) {
+    const entry = projectRobots.find(entry => entry.id === id);
+    const stored = await invoke<RobotDraft | null>('builder_draft_load', { root, id });
+    const latest = allVersions.find(version => (version.robotId || 'legacy') === id);
+    let next: Robot, nextWarnings: string[] = [];
+    if (stored) next = stored.robot;
+    else if (latest) next = await invoke<Robot>('builder_load', { root, kind: 'versions', id: latest.id });
+    else if (entry?.source) {
+      if (entry.missing) throw new Error(`Source file is missing: ${entry.source}`);
+      const result = await loadProjectUrdf(root, entry.source);
+      next = result.robot; nextWarnings = result.warnings;
+    } else next = emptyRobot();
+    // Drafts may contain incomplete edits, which must remain recoverable.
+    if (!stored && next.links.length) {
+      const errors = validate(next); if (errors.length) throw new Error(errors.join('\n'));
+    }
+    if (id !== 'legacy') next.projectRobotId = id;
+    await invoke('builder_activate_robot', { root, id });
+    activeRobotId = id;
+    replace(next, stored ? stored.currentVersion : latest?.id || '');
+    if (stored) {
+      saved = stored.saved; selected = stored.selected; positions = stored.positions; warnings = stored.warnings;
+    } else warnings = nextWarnings;
+  }
+  async function switchRobot(id: string) {
+    if (id === activeRobotId) return;
+    await work(async () => { await persistDraft(); await openRobot(id); });
+  }
+  function browseRobots() { pickedRobotId = activeRobotId; error = ''; robotPickerOpen = true; }
+  async function previewProjectRobot(id: string): Promise<Robot> {
+    if (id === activeRobotId) return clone(robot);
+    const stored = await invoke<RobotDraft | null>('builder_draft_load', { root, id });
+    if (stored) return stored.robot;
+    const latest = allVersions.find(version => (version.robotId || 'legacy') === id);
+    if (latest) return invoke<Robot>('builder_load', { root, kind: 'versions', id: latest.id });
+    const entry = projectRobots.find(entry => entry.id === id);
+    if (entry?.source && !entry.missing) return (await loadProjectUrdf(root, entry.source)).robot;
+    throw new Error('No robot preview available.');
+  }
+  async function openPickedRobot() {
+    await switchRobot(pickedRobotId);
+    if (activeRobotId === pickedRobotId) robotPickerOpen = false;
+  }
+  function beginCreate() {
+    let name = 'new-robot', index = 2;
+    while (projectRobots.some(entry => entry.source?.startsWith(`robots/${name}/`))) name = `new-robot-${index++}`;
+    createName = name; createError = ''; createOpen = true;
+  }
+  async function createRobot() {
+    if (busy) return;
+    busy = true; createError = '';
+    try {
+      await persistDraft();
+      const entry = await invoke<ProjectRobot>('builder_add_robot', { root, name: createName.trim() });
+      projectRobots = [...projectRobots, entry];
+      await openRobot(entry.id);
+      await persistDraft();
+      createOpen = false;
+      notify(`Created ${entry.source}.`);
+    } catch (cause) { createError = String(cause); }
+    finally { busy = false; }
+  }
+  async function rescanRobots() {
+    await work(async () => {
+      await persistDraft();
+      const project = await invoke<ProjectRobots>('builder_project', { root });
+      projectRobots = project.robots;
+      await refresh();
+    });
   }
   function replace(next: Robot, id = '') {
     explode = false; collapsed = {}; assemblyOpen = true; partsOpen = false; section = 'Assembly'; library = ''; moduleRobot = emptyRobot(); editingName = false; robot = next; saved = id ? JSON.stringify(next) : JSON.stringify(emptyRobot()); currentVersion = id; selected = next.links[0]?.id || ''; positions = {}; warnings = [];
@@ -144,6 +248,7 @@
       const snapshot = clone(robot);
       const version = await invoke<SavedVersion>('builder_save', { root, kind, robot: snapshot });
       if (kind === 'versions') { currentVersion = version.id; saved = JSON.stringify(snapshot); }
+      await persistDraft();
       notify(kind === 'versions' ? `Saved ${version.name}.` : `Added ${version.name} to the module library.`);
       await refresh();
     });
@@ -167,8 +272,11 @@
   function pickFiles(files: FileList | null) {
     if (!files?.length) return;
     importError = '';
-    importFiles = Array.from(files).filter(f => /\.(urdf|stl|obj)$/i.test(f.name));
-    chosenUrdf = importFiles.find(f => /\.urdf$/i.test(f.name))?.webkitRelativePath || importFiles.find(f => /\.urdf$/i.test(f.name))?.name || '';
+    importFiles = Array.from(files);
+    const urdfs = importFiles.filter(file => /\.urdf$/i.test(file.name));
+    chosenUrdf = urdfs.length === 1 ? urdfs[0].webkitRelativePath || urdfs[0].name : '';
+    destinationName = (importFiles[0]?.webkitRelativePath.split('/')[0] || urdfs[0]?.name.replace(/\.urdf$/i, '') || 'robot')
+      .replace(/[\\/:*?"<>|]/g, '-').replace(/^\.+|\.+$/g, '') || 'robot';
     importOpen = true;
   }
   async function runImport() {
@@ -176,9 +284,20 @@
     busy = true;
     importError = '';
     try {
-      const result = await importUrdf(importFiles, chosenUrdf);
-      replace(result.robot); warnings = result.warnings; error = ''; importOpen = false;
-      notify('Imported robot. Save a version to keep it in this project.');
+      // Validate before copying, so missing meshes don't leave partial robots.
+      await importUrdf(importFiles, chosenUrdf);
+      const files = await prepareRobotImport(importFiles);
+      const selectedFile = importFiles.find(file => (file.webkitRelativePath || file.name) === chosenUrdf)!;
+      const source = `robots/${destinationName.trim()}/${importedPath(selectedFile)}`;
+      await persistDraft();
+      const project = await invoke<ProjectRobots>('builder_import_robot', { root, name: destinationName.trim(), files });
+      projectRobots = project.robots;
+      const entry = projectRobots.find(entry => entry.source === source);
+      if (!entry) throw new Error('Imported files were not found. Refresh the project robot list.');
+      await openRobot(entry.id);
+      await persistDraft();
+      error = ''; importOpen = false;
+      notify(`Imported into robots/${destinationName.trim()}/.`);
     } catch (cause) {
       importError = cause instanceof Error ? cause.message : String(cause);
     } finally {
@@ -188,11 +307,23 @@
   onMount(() => {
     let disposed = false;
     void (async () => {
-      try { await refresh(); if (versions.length) { const next = await invoke<Robot>('builder_load', { root, kind: 'versions', id: versions[0].id }); if (!disposed) { const errors = validate(next); if (errors.length) throw new Error(errors.join('\n')); replace(next, versions[0].id); } } }
+      try {
+        const project = await invoke<ProjectRobots>('builder_project', { root });
+        await refresh();
+        if (disposed) return;
+        projectRobots = project.robots;
+        const restored = project.activeRobotId;
+        const id = restored && (restored === 'legacy' || projectRobots.some(entry => entry.id === restored))
+          ? restored : projectRobots[0]?.id || 'legacy';
+        await openRobot(id);
+      }
       catch (cause) { if (!disposed) error = String(cause); }
       finally { if (!disposed) busy = false; }
     })();
-    return () => { toast.dismiss('builder-success'); disposed = true; studio.builderDirty = false; studio.builderBusy = false; };
+    return () => {
+      if (activeRobotId) void persistDraft().catch(cause => toast.error(`Could not save Builder draft: ${cause}`));
+      toast.dismiss('builder-success'); disposed = true; studio.builderDirty = false; studio.builderBusy = false;
+    };
   });
 </script>
 
@@ -231,10 +362,34 @@
     <fieldset disabled={busy} class="m-0 flex min-h-0 w-full min-w-0 flex-1 flex-col border-0 p-0">
       <div class="group flex h-7 shrink-0 items-center gap-1 px-2">
         <span class="min-w-0 flex-1 truncate text-xs font-medium text-title" title={robot.name}>{robot.name}</span>
-        <Button variant="ghost" size="icon" class="size-6" aria-label="New" title="New assembly" onclick={() => replaceSafely(() => replace(emptyRobot()))}><FilePlus size={14} /></Button>
-        <Button variant="ghost" size="icon" class="size-6" aria-label="Import URDF" title="Import URDF and mesh files" onclick={() => filesInput.click()}><FileUp size={14} /></Button>
-        <Button variant="ghost" size="icon" class="size-6" aria-label="Import robot folder" title="Import robot folder" onclick={() => folderInput.click()}><FolderOpen size={14} /></Button>
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger disabled={busy} aria-label="Add robot" class="flex h-6 shrink-0 items-center gap-1 rounded px-1 text-xs text-title hover:bg-hover"><FilePlus size={14} />Add robot<ChevronDown size={12} /></DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content align="end" sideOffset={4} class="z-50 min-w-48 rounded-md border border-border bg-surface p-1 shadow-xl">
+              <DropdownMenu.Item class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs outline-none data-highlighted:bg-hover" onSelect={beginCreate}><FilePlus size={14} />Create blank robot</DropdownMenu.Item>
+              <DropdownMenu.Item class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs outline-none data-highlighted:bg-hover" onSelect={() => filesInput.click()}><FileUp size={14} />Import URDF files…</DropdownMenu.Item>
+              <DropdownMenu.Item class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs outline-none data-highlighted:bg-hover" onSelect={() => folderInput.click()}><FolderOpen size={14} />Import folder…</DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
         <Button variant="ghost" size="icon" class="size-6" disabled={!!issues.length} aria-label="Save assembly as module" title="Save assembly as module" onclick={() => save('modules')}><Save size={14} /></Button>
+      </div>
+      <div class="space-y-1 border-b border-border px-2 pb-2">
+        <div class="flex items-center justify-between text-[10px] text-muted">
+          <span>Project robot</span>
+          <button type="button" class="hover:text-title" onclick={rescanRobots}>Refresh robots</button>
+        </div>
+        <button type="button" aria-label="Choose project robot" aria-haspopup="dialog" disabled={busy} onclick={browseRobots}
+          class="flex w-full min-w-0 items-center gap-2 rounded-md border border-border bg-raised px-2.5 py-2 text-left hover:border-border-strong focus-visible:outline-2 focus-visible:outline-ring">
+          <Box size={17} class="shrink-0 text-muted" />
+          <span class="min-w-0 flex-1">
+            <span class="block truncate text-xs font-medium text-title">{activeProjectRobot?.source?.split('/').at(-1) || (robot.links.length ? robot.name : 'Choose a robot')}</span>
+            <span class="mt-0.5 block truncate text-[10px] text-muted" title={activeProjectRobot?.source || ''}>{activeProjectRobot?.source || `${robotEntries.length} project robots · Browse previews`}</span>
+          </span>
+          <LayoutGrid size={14} class="shrink-0 text-muted" />
+        </button>
+        {#if activeProjectRobot?.missing}<p class="text-[10px] text-warning">Source missing. Your draft and saved versions remain available.</p>{/if}
+        {#if draftError}<p class="text-xs text-error" role="alert">{draftError}</p>{/if}
       </div>
       <div class="min-w-0 shrink-0 px-2 py-2">
         <div class="relative min-w-0">
@@ -275,7 +430,7 @@
         </div>
         <div class="min-h-0 min-w-0 flex-1 overflow-x-hidden pb-2" role="region" aria-label="Assembly">
           {#if robot.links.length && !matchingLinks.length}<p class="px-3 py-2 text-xs text-muted">No matching assembly parts.</p>{/if}
-          {#each roots(robot) as link}{@render tree(link.id, 0)}{:else}<p class="px-3 py-2 text-xs text-muted">Import a robot using the folder icon above to begin.</p>{/each}
+          {#each roots(robot) as link}{@render tree(link.id, 0)}{:else}<p class="px-3 py-2 text-xs text-muted">Use Add robot to create or import a robot into this project.</p>{/each}
         </div>
       </details>
       <details bind:open={partsOpen} class="group/catalog border-t border-border">
@@ -292,14 +447,14 @@
           {#if !visibleParts.length}<p class="px-3 py-2 text-xs text-muted">{catalog.length ? 'No matching parts.' : 'Import a robot or save a module to populate your catalog.'}</p>{/if}
         </div>
       </details>
-      <details class="group/add border-t border-border">
+      <details class="group/add min-w-0 border-t border-border">
         <summary class="flex h-7 cursor-pointer list-none items-center gap-1 px-2 text-xs text-title [&::-webkit-details-marker]:hidden"><ChevronRight size={12} class="group-open/add:rotate-90" />Add to assembly</summary>
-        <div class="flex flex-col gap-2 px-3 pb-3">
-        <NativeSelect aria-label="Module" value={library} onchange={event => chooseModule(event.currentTarget.value)}><option value="" disabled>Select a part</option>{#each robot.links as link}<option value={`link:${link.id}`}>{link.name}</option>{/each}{#each modules as module}<option value={module.id}>{module.name} · {module.links} links</option>{/each}</NativeSelect>
+        <div class="flex min-w-0 flex-col gap-2 px-3 pb-3">
+        <NativeSelect class="w-full min-w-0 max-w-full" aria-label="Module" value={library} onchange={event => chooseModule(event.currentTarget.value)}><option value="" disabled>Select a part</option>{#each robot.links as link}<option value={`link:${link.id}`}>{link.name}</option>{/each}{#each modules as module}<option value={module.id}>{module.name} · {module.links} links</option>{/each}</NativeSelect>
         {#if robot.links.length}
           <p class="truncate text-xs text-muted">Attach to: {selectedLink?.name || 'Select a link'}</p>
-          <NativeSelect aria-label="Parent mounting point" bind:value={parentMount}><option value="" disabled>Parent mounting point</option>{#each selectedLink?.mounts || [] as mount}<option value={mount.name}>{mount.name}</option>{/each}</NativeSelect>
-          <NativeSelect aria-label="Module mounting point" bind:value={childMount}><option value="" disabled>Module mounting point</option>{#each moduleRoot?.mounts || [] as mount}<option value={mount.name}>{mount.name}</option>{/each}</NativeSelect>
+          <NativeSelect class="w-full min-w-0 max-w-full" aria-label="Parent mounting point" bind:value={parentMount}><option value="" disabled>Parent mounting point</option>{#each selectedLink?.mounts || [] as mount}<option value={mount.name}>{mount.name}</option>{/each}</NativeSelect>
+          <NativeSelect class="w-full min-w-0 max-w-full" aria-label="Module mounting point" bind:value={childMount}><option value="" disabled>Module mounting point</option>{#each moduleRoot?.mounts || [] as mount}<option value={mount.name}>{mount.name}</option>{/each}</NativeSelect>
         {/if}
         <Button onclick={addModule} disabled={!moduleRobot.links.length || (!!robot.links.length && (!selectedLink || !parentMount || !childMount))}>Add module</Button>
         </div>
@@ -402,11 +557,34 @@
   </WorkspaceColumn>
 </div>
 
-<Dialog.Root bind:open={importOpen}>{#if importOpen}<Dialog.Content><Dialog.Title>Import robot</Dialog.Title><Dialog.Description>Select a URDF. STL and OBJ meshes must be included in the selected files or folder.</Dialog.Description>
-  <NativeSelect aria-label="URDF file" class="mt-3 w-full" bind:value={chosenUrdf}>{#each importFiles.filter(f => /\.urdf$/i.test(f.name)) as file}<option value={file.webkitRelativePath || file.name}>{file.webkitRelativePath || file.name}</option>{/each}</NativeSelect>
-  <p class="mt-2 text-xs text-muted">{importFiles.length} robot and mesh files selected.</p>
+<Dialog.Root bind:open={robotPickerOpen}>{#if robotPickerOpen}<Dialog.Content class="max-w-4xl">
+  <Dialog.Title>Choose a robot</Dialog.Title>
+  <Dialog.Description>Browse project URDFs and preview their assemblies. Your current draft is preserved when you switch.</Dialog.Description>
+  <div class="mt-4"><RobotPicker entries={robotEntries} bind:value={pickedRobotId} active={activeRobotId} disabled={busy} load={previewProjectRobot} /></div>
+  {#if error}<p class="mt-3 text-xs text-error" role="alert">{error}</p>{/if}
+  <div class="mt-4 flex items-center justify-between gap-3 border-t border-border pt-4">
+    <p class="min-w-0 truncate text-xs text-muted">{robotEntries.find(entry => entry.id === pickedRobotId)?.path || 'Select a robot to open'}</p>
+    <div class="flex shrink-0 gap-2"><Button disabled={busy} onclick={() => robotPickerOpen = false}>Cancel</Button><Button variant="default" disabled={busy || !robotEntries.some(entry => entry.id === pickedRobotId)} onclick={openPickedRobot}>{busy ? 'Opening…' : 'Open robot'}</Button></div>
+  </div>
+</Dialog.Content>{/if}</Dialog.Root>
+<Dialog.Root bind:open={createOpen}>{#if createOpen}<Dialog.Content><Dialog.Title>Create blank robot</Dialog.Title><Dialog.Description>Create a URDF with a base link inside this project's robots folder.</Dialog.Description>
+  <label for="create-robot-name" class="mt-3 block text-xs">Robot folder name</label>
+  <Input id="create-robot-name" class="mt-1" bind:value={createName} disabled={busy} />
+  <p class="mt-2 break-all text-xs text-muted">robots/{createName.trim() || '…'}/robot.urdf</p>
+  {#if createError}<p class="mt-2 whitespace-pre-wrap text-xs text-error" role="alert">{createError}</p>{/if}
+  <div class="mt-4 flex justify-end gap-2"><Button disabled={busy} onclick={() => createOpen = false}>Cancel</Button><Button variant="default" disabled={busy || !createName.trim()} onclick={createRobot}>Create robot</Button></div>
+</Dialog.Content>{/if}</Dialog.Root>
+<Dialog.Root bind:open={importOpen}>{#if importOpen}<Dialog.Content class="max-w-4xl"><Dialog.Title>Import robot</Dialog.Title><Dialog.Description>Preview the included robots and choose one to open. All selected files will be copied into this project.</Dialog.Description>
+  <label for="import-robot-name" class="mt-3 block text-xs">Robot folder name</label>
+  <Input id="import-robot-name" class="mt-1" bind:value={destinationName} disabled={busy} />
+  <p class="mt-2 break-all text-xs text-muted">Destination: robots/{destinationName.trim() || '…'}/</p>
+  <div class="mt-4"><RobotPicker
+    entries={importFiles.filter(file => /\.urdf$/i.test(file.name)).map(file => ({ id: file.webkitRelativePath || file.name, name: file.name, path: file.webkitRelativePath || file.name }))}
+    bind:value={chosenUrdf} disabled={busy}
+    load={async id => (await importUrdf(importFiles, id)).robot} /></div>
+  <p class="mt-2 text-xs text-muted">{importFiles.length} files selected. All included URDFs will appear in Project robot.</p>
   {#if importError}<p class="mt-2 whitespace-pre-wrap text-xs text-error" role="alert">{importError}</p>{/if}
-  <div class="mt-4 flex justify-end gap-2"><Button disabled={busy} onclick={() => importOpen = false}>Cancel</Button><Button variant="default" disabled={busy || !chosenUrdf} onclick={() => replaceSafely(runImport)}>Import</Button></div>
+  <div class="mt-4 flex justify-end gap-2"><Button disabled={busy} onclick={() => importOpen = false}>Cancel</Button><Button variant="default" disabled={busy || !chosenUrdf || !destinationName.trim()} onclick={runImport}>Import</Button></div>
 </Dialog.Content>{/if}</Dialog.Root>
 <Dialog.Root bind:open={confirmOpen}>{#if confirmOpen}<Dialog.Content><Dialog.Title>{confirmTitle}</Dialog.Title><Dialog.Description>{confirmText}</Dialog.Description><div class="mt-4 flex justify-end gap-2"><Button onclick={() => { confirmOpen = false; pending = null; }}>Cancel</Button><Button variant="destructive" onclick={() => { const action = pending; pending = null; confirmOpen = false; void action?.(); }}>Continue</Button></div></Dialog.Content>{/if}</Dialog.Root>
 

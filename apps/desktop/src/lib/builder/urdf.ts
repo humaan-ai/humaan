@@ -9,16 +9,27 @@ function vector(value: string | null | undefined, fallback: Vec3 = [0, 0, 0]): V
 function origin(e: Element): Pose { const o = child(e, 'origin'); return { xyz: vector(o?.getAttribute('xyz')), rpy: vector(o?.getAttribute('rpy')) }; }
 function normalize(path: string) { const stack: string[] = []; for (const part of path.replaceAll('\\', '/').split('/')) { if (part === '..') stack.pop(); else if (part && part !== '.') stack.push(part); } return stack.join('/'); }
 function bytesToBase64(bytes: Uint8Array) { let binary = ''; for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.subarray(i, i + 8192)); return btoa(binary); }
-export async function importUrdf(files: File[], filename?: string): Promise<{ robot: Robot; warnings: string[] }> {
+export type UrdfFile = Pick<File, 'name' | 'webkitRelativePath' | 'size' | 'text' | 'arrayBuffer'>;
+export function resolveUrdfMesh(files: UrdfFile[], base: string, name: string): UrdfFile {
+  const resource = name.replace(/^(package|file):\/\//, '');
+  const paths = [normalize(`${base}/${resource}`), normalize(resource)];
+  let matches = files.filter(f => paths.includes(normalize(f.webkitRelativePath || f.name)));
+  if (!matches.length) matches = files.filter(f => (f.webkitRelativePath || f.name).endsWith('/' + resource) || f.name === resource.split('/').at(-1));
+  if (matches.length !== 1) throw new Error(`${matches.length ? 'Ambiguous' : 'Missing'} mesh: ${name}. Include its mesh files in the import.`);
+  return matches[0];
+}
+export async function importUrdf(files: UrdfFile[], filename?: string): Promise<{ robot: Robot; warnings: string[] }> {
   const candidates = files.filter(f => /\.urdf$/i.test(f.name));
   const file = filename ? candidates.find(f => (f.webkitRelativePath || f.name) === filename) : candidates.length === 1 ? candidates[0] : undefined;
   if (!file) throw new Error(candidates.length > 1 ? 'Choose one URDF from the folder.' : 'Choose a URDF file with its STL or OBJ meshes. Expand Xacro to URDF before importing.');
-  if (files.reduce((sum, f) => sum + f.size, 0) > 64 * 1024 * 1024) throw new Error('Import up to 64 MB of robot files at a time.');
+  let loadedSize = file.size;
+  if (loadedSize > 64 * 1024 * 1024) throw new Error('Import up to 64 MB of robot files at a time.');
   const text = await file.text();
   const doc = new DOMParser().parseFromString(text, 'application/xml');
   if (doc.querySelector('parsererror') || doc.documentElement.tagName !== 'robot') throw new Error('The file is not valid URDF XML.');
   if (Array.from(doc.getElementsByTagName('*')).some(e => e.tagName.startsWith('xacro:'))) throw new Error('Expand Xacro to URDF before importing.');
   const element = doc.documentElement, robot = emptyRobot(), warnings: string[] = [];
+  const meshLoads = new Map<string, Promise<void>>();
   robot.name = element.getAttribute('name') || file.name.replace(/\.urdf$/i, ''); robot.source = text;
   const base = (file.webkitRelativePath || file.name).split('/').slice(0, -1).join('/');
   async function geometry(e: Element): Promise<Shape> {
@@ -34,15 +45,17 @@ export async function importUrdf(files: File[], filename?: string): Promise<{ ro
     const rgba = definition && child(definition, 'color')?.getAttribute('rgba')?.split(/\s+/).map(Number);
     if (rgba && rgba.length >= 3) shape.color = '#' + rgba.slice(0, 3).map(v => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, '0')).join('');
     if (shape.kind === 'mesh') {
-      const name = g.getAttribute('filename') || ''; const resource = name.replace(/^(package|file):\/\//, '');
-      const paths = [normalize(`${base}/${resource}`), normalize(resource)];
-      let matches = files.filter(f => paths.includes(normalize(f.webkitRelativePath || f.name)));
-      if (!matches.length) matches = files.filter(f => (f.webkitRelativePath || f.name).endsWith('/' + resource) || f.name === resource.split('/').at(-1));
-      if (matches.length !== 1) throw new Error(`${matches.length ? 'Ambiguous' : 'Missing'} mesh: ${name}. Include its mesh files in the import.`);
-      const mesh = matches[0], format = mesh.name.split('.').at(-1)?.toLowerCase();
+      const mesh = resolveUrdfMesh(files, base, g.getAttribute('filename') || ''), format = mesh.name.split('.').at(-1)?.toLowerCase();
       if (format !== 'stl' && format !== 'obj') throw new Error(`Mesh format .${format} is not supported yet. Convert ${mesh.name} to STL or OBJ.`);
       shape.asset = mesh.webkitRelativePath || mesh.name; shape.size = vector(g.getAttribute('scale'), [1, 1, 1]);
-      if (!robot.assets[shape.asset]) robot.assets[shape.asset] = { format, data: bytesToBase64(new Uint8Array(await mesh.arrayBuffer())) };
+      if (!meshLoads.has(shape.asset)) {
+        meshLoads.set(shape.asset, (async () => {
+          loadedSize += mesh.size;
+          if (loadedSize > 64 * 1024 * 1024) throw new Error('Import up to 64 MB of referenced robot files at a time.');
+          robot.assets[shape.asset] = { format, data: bytesToBase64(new Uint8Array(await mesh.arrayBuffer())) };
+        })());
+      }
+      await meshLoads.get(shape.asset);
     }
     return shape;
   }

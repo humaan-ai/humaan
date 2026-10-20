@@ -10,6 +10,7 @@ test('catalog is empty without sample items or simulated actions', async ({ page
       if (command === 'experience_list') return { records: [], warning: null };
       if (command === 'experience_reviews') return {};
       if (['learning_set_list', 'simulation_list', 'builder_list'].includes(command)) return [];
+      if (command === 'builder_project') return { activeRobotId: null, robots: [] };
       if (command === 'simulation_tools_status') return { ready: false, installing: false, phase: 'Not installed' };
       throw new Error('Unexpected IPC ' + command);
     } };

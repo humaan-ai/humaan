@@ -14,6 +14,8 @@ pub struct Version {
     name: String,
     saved_at: u64,
     links: usize,
+    #[serde(default)]
+    robot_id: Option<String>,
 }
 #[derive(Serialize, Deserialize)]
 struct Snapshot {
@@ -62,6 +64,7 @@ fn save(root: &str, kind: &str, robot: Value) -> Result<Version, String> {
             name,
             saved_at: now.as_millis() as u64,
             links,
+            robot_id: robot["projectRobotId"].as_str().map(str::to_owned),
         },
         robot,
     };
@@ -166,5 +169,23 @@ mod tests {
         assert!(snapshot_path(root, "versions", "../../escape").is_err());
         assert!(store(root, "../../escape").is_err());
         assert!(save(root, "versions", serde_json::json!({})).is_err());
+    }
+
+    #[test]
+    fn versions_keep_robot_identity_without_changing_snapshot_paths() {
+        let folder = tempfile::tempdir().unwrap();
+        humaan_engine::project::init(folder.path(), "Multiple robots").unwrap();
+        let root = folder.path().to_str().unwrap();
+        for id in ["arm-a", "arm-b"] {
+            let robot = serde_json::json!({"schema":1,"projectRobotId":id,"name":"Same name","links":[{"id":"base"}],"joints":[],"assets":{}});
+            let version = save(root, "versions", robot).unwrap();
+            assert_eq!(version.robot_id.as_deref(), Some(id));
+            assert!(snapshot_path(root, "versions", &version.id).unwrap().exists());
+        }
+        let versions = list(root, "versions").unwrap();
+        assert_eq!(versions.len(), 2);
+        assert_ne!(versions[0].robot_id, versions[1].robot_id);
+        let legacy: Version = serde_json::from_value(serde_json::json!({"id":"123","name":"Legacy","savedAt":0,"links":1})).unwrap();
+        assert!(legacy.robot_id.is_none());
     }
 }

@@ -15,6 +15,7 @@ test('robot connection, live mapping, recording recovery and session replay', as
       if (command === 'experience_reviews') return {};
       if (['learning_set_list', 'simulation_list'].includes(command)) return [];
       if (command === 'builder_list') return [{ id: '1-2', name: 'SO-101', savedAt: 1, links: 2 }];
+      if (command === 'builder_project') return { activeRobotId: null, robots: [] };
       if (command === 'builder_load') return robot;
       if (command === 'simulation_tools_status') return { ready: false, installing: false, phase: 'Not installed' };
       if (command === 'deployment_list') return data[args.kind];

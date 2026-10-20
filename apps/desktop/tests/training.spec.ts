@@ -19,6 +19,7 @@ test('pin a loop experiment, train locally and remotely, compare and reload resu
         if (['learning_set_list', 'simulation_list', 'deployment_list', 'policy_list'].includes(command)) return [];
         if (command === 'simulation_tools_status') return { ready: true, installing: false, phase: 'Ready', version: '3.2.7' };
         if (command === 'builder_list') return args.kind === 'versions' ? [{ id: '123', name: robot.name, savedAt: 1700000000000, links: 2 }] : [];
+        if (command === 'builder_project') return { activeRobotId: null, robots: [] };
         if (command === 'builder_load') return robot;
         if (command === 'training_catalog') return read();
         if (command === 'training_create') {

@@ -1,5 +1,8 @@
 <script lang="ts">
   import * as Dialog from "$lib/components/ui/dialog/index.js";
+  import { DropdownMenu } from "bits-ui";
+  import Filter from "@lucide/svelte/icons/filter";
+  import Check from "@lucide/svelte/icons/check";
   import FileText from "@lucide/svelte/icons/file-text";
   import FileCode from "@lucide/svelte/icons/file-code";
   import ProjectOverview from "./ProjectOverview.svelte";
@@ -51,12 +54,21 @@
     finally { createBusy = false; }
   }
   let query = $state('');
+  let assetType = $state('All');
+  const assetTypes = [
+    { value: 'All', label: 'All asset types' },
+    { value: 'Robot / scene', label: 'Robots / scenes' },
+    { value: 'Mesh', label: 'Meshes' },
+    { value: 'Image', label: 'Images' },
+    { value: 'Recording', label: 'Recordings' },
+  ];
   let entries = $state<Entry[]>([]);
   let busy = $state(false);
   let error = $state('');
   let truncated = $state(false);
   let request = 0;
-  const filtered = $derived(entries.filter(entry => entry.path.toLowerCase().includes(query.toLowerCase())));
+  const filtered = $derived(entries.filter(entry =>
+    (assetType === 'All' || entry.kind === assetType) && entry.path.toLowerCase().includes(query.trim().toLowerCase())));
   async function load() {
     const id = ++request;
     if (section !== 'assets') { busy = false; return; }
@@ -68,7 +80,7 @@
     finally { if (id === request) busy = false; }
   }
   $effect(() => { section; project.root; void load(); });
-  function navigate(next: typeof section) { section = next; query = ''; }
+  function navigate(next: typeof section) { section = next; query = ''; assetType = 'All'; }
   type Editor = { path: string; name: string; content: string; saved: string; readOnly: boolean; loading: boolean; saving: boolean; error: string; failed: boolean; crlf: boolean };
   let tabs = $state<Editor[]>([]);
   let activePath = $state('');
@@ -149,15 +161,38 @@
         <div class="flex shrink-0 flex-wrap items-center gap-2 border-b border-border p-3">
           <span class="flex-1 text-xs text-muted">Asset files across this project</span>
           <button class="rounded p-1 text-muted hover:bg-selection" aria-label="Refresh assets" title="Refresh" disabled={busy} onclick={load}><RefreshCw size={15} /></button>
-          <Input class="w-full" aria-label="Search assets" placeholder="Search assets…" bind:value={query} />
+          <div class="relative w-full min-w-0">
+            <Input class="w-full pr-9" aria-label="Search assets" placeholder="Search assets…" bind:value={query} />
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger aria-label="Filter assets by type" title={assetTypes.find(type => type.value === assetType)?.label}
+                class="absolute inset-y-0 right-1 my-auto flex size-6 items-center justify-center rounded hover:bg-hover focus-visible:outline focus-visible:outline-ring {assetType !== 'All' ? 'bg-selection text-title' : 'text-muted'}">
+                <Filter size={14} />
+                {#if assetType !== 'All'}<span class="absolute right-0.5 top-0.5 size-1 rounded-full bg-current" aria-hidden="true"></span>{/if}
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content align="end" sideOffset={6} class="z-50 w-48 rounded-md border border-border bg-surface p-1 shadow-xl outline-none">
+                  <DropdownMenu.Group>
+                    <DropdownMenu.GroupHeading class="px-2 py-1.5 text-[10px] font-medium uppercase text-muted">Asset type</DropdownMenu.GroupHeading>
+                    <DropdownMenu.RadioGroup bind:value={assetType}>
+                      {#each assetTypes as type}
+                        <DropdownMenu.RadioItem value={type.value} class="flex cursor-default items-center gap-2 rounded px-2 py-1.5 text-xs outline-none data-[highlighted]:bg-selection">
+                          <span class="flex w-3 items-center">{#if assetType === type.value}<Check size={12} />{/if}</span>{type.label}
+                        </DropdownMenu.RadioItem>
+                      {/each}
+                    </DropdownMenu.RadioGroup>
+                  </DropdownMenu.Group>
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Root>
+          </div>
         </div>
-        {#if section === 'assets'}<p class="shrink-0 px-4 pt-3 text-xs text-muted">Robot, mesh, image, and recording files.</p>{/if}
+        <p class="shrink-0 px-4 pt-3 text-xs text-muted">{assetType === 'All' ? 'Robot, mesh, image, and recording files.' : `${assetTypes.find(type => type.value === assetType)?.label} · ${filtered.length} matching files`}</p>
         {#if truncated}<p role="status" class="px-4 pt-3 text-xs text-muted">Scan limited to 20,000 entries. Open a smaller folder in Files to browse further.</p>{/if}
         <div class="min-h-0 flex-1 overflow-auto p-3" aria-busy={busy}>
           {#if error}
             <p role="alert" class="p-3 text-sm text-destructive">{error}</p>
           {:else if busy}<p role="status" class="p-3 text-sm text-muted">Loading {section}…</p>
-          {:else if !filtered.length}<p class="p-3 text-sm text-muted">{query ? 'No matching files.' : section === 'assets' ? 'No asset files found. Add robot models, meshes, images, or recordings to your project folder, then refresh.' : 'This folder is empty.'}</p>
+          {:else if !filtered.length}<p class="p-3 text-sm text-muted">{query || assetType !== 'All' ? 'No matching files.' : 'No asset files found. Add robot models, meshes, images, or recordings to your project folder, then refresh.'}</p>
           {:else}
             <ul class="space-y-0.5">
               {#each filtered as entry (entry.path)}

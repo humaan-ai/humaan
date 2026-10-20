@@ -1,4 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 async function openBuilder(page: Page) {
   await page.addInitScript(() => {
@@ -12,6 +14,42 @@ async function openBuilder(page: Page) {
         if (command === 'experience_list') return { records: [], warning: null };
         if (command === 'experience_reviews') return {};
         if (command === 'learning_set_list') return [];
+        if (command === 'builder_project') return JSON.parse(localStorage.getItem('test-project-robots') || '{"activeRobotId":null,"robots":[]}');
+        if (command === 'builder_add_robot' || command === 'builder_import_robot') {
+          const state = JSON.parse(localStorage.getItem('test-project-robots') || '{"activeRobotId":null,"robots":[]}');
+          const files = JSON.parse(localStorage.getItem('test-robot-files') || '[]');
+          const prefix = `robots/${args.name}/`;
+          if (files.some((file: any) => file.path.startsWith(prefix))) throw new Error(`${prefix} already exists. Choose another folder name or cancel.`);
+          const incoming = command === 'builder_add_robot'
+            ? [{ path: 'robot.urdf', data: Array.from(new TextEncoder().encode(`<robot name="${args.name}"><link name="base_link"/></robot>`)) }]
+            : args.files;
+          for (const file of incoming) {
+            const source = prefix + file.path;
+            files.push({ path: source, data: file.data });
+            if (/\.urdf$/i.test(file.path)) state.robots.push({ id: crypto.randomUUID(), name: file.path.replace(/\.urdf$/i, ''), source, missing: false });
+          }
+          localStorage.setItem('test-robot-files', JSON.stringify(files));
+          localStorage.setItem('test-project-robots', JSON.stringify(state));
+          return command === 'builder_add_robot' ? state.robots.at(-1) : state;
+        }
+        if (command === 'builder_activate_robot') {
+          const state = JSON.parse(localStorage.getItem('test-project-robots') || '{"activeRobotId":null,"robots":[]}');
+          state.activeRobotId = args.id; localStorage.setItem('test-project-robots', JSON.stringify(state)); return;
+        }
+        if (command === 'builder_draft_load') return JSON.parse(localStorage.getItem('test-draft-' + args.id) || 'null');
+        if (command === 'builder_draft_save') {
+          localStorage.setItem('test-draft-' + args.id, JSON.stringify(args.draft));
+          const state = JSON.parse(localStorage.getItem('test-project-robots') || '{"activeRobotId":null,"robots":[]}');
+          const entry = state.robots.find((entry: any) => entry.id === args.id);
+          if (entry) entry.name = args.draft.robot.name;
+          localStorage.setItem('test-project-robots', JSON.stringify(state)); return;
+        }
+        if (command === 'builder_robot_files') return JSON.parse(localStorage.getItem('test-robot-files') || '[]').map((f: any) => ({ path: f.path, size: f.data?.length ?? f.text.length }));
+        if (command === 'builder_read_robot_file') {
+          const file = JSON.parse(localStorage.getItem('test-robot-files') || '[]').find((f: any) => f.path === args.path);
+          if (!file) throw new Error('Source file missing.');
+          return file.data ?? Array.from(new TextEncoder().encode(file.text));
+        }
         if (command === 'dataset_tools_status') return { ready: false, custom: true, installing: false, phase: 'Custom dataset environment', error: null };
         if (command === 'simulation_tools_status') return { ready: !!localStorage.getItem('test-mujoco-installed'), installing: false, phase: localStorage.getItem('test-mujoco-installed') ? 'MuJoCo 3.2.7 is ready' : 'MuJoCo is not installed', version: '3.2.7', python: '/managed/python', error: null };
         if (command === 'simulation_tools_install') {
@@ -39,7 +77,7 @@ async function openBuilder(page: Page) {
           const snapshots = JSON.parse(localStorage.getItem(key) || '[]');
           if (command === 'builder_list') return snapshots.map((s: any) => s.version).reverse();
           if (command === 'builder_load') return snapshots.find((s: any) => s.version.id === args.id).robot;
-          const version = { id: String(snapshots.length + 1), name: args.robot.name, savedAt: Date.now(), links: args.robot.links.length };
+          const version = { id: String(snapshots.length + 1), name: args.robot.name, savedAt: Date.now(), links: args.robot.links.length, robotId: args.robot.projectRobotId };
           snapshots.push({ version, robot: args.robot }); localStorage.setItem(key, JSON.stringify(snapshots)); return version;
         }
         if (command.startsWith('plugin:event|')) return 1;
@@ -50,8 +88,67 @@ async function openBuilder(page: Page) {
   await page.goto('/');
   await page.getByRole('button', { name: 'Open project', exact: true }).click();
   await page.getByRole('button', { name: 'Builder', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Import URDF', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Add robot', exact: true })).toBeEnabled();
 }
+
+async function createBlankRobot(page: Page) {
+  await page.getByRole('button', { name: 'Add robot', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Create blank robot', exact: true }).click();
+  await page.getByRole('button', { name: 'Create robot', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+}
+
+async function chooseProjectRobot(page: Page, id: string) {
+  await page.getByRole('button', { name: 'Choose project robot', exact: true }).click();
+  await page.locator(`[data-robot-id="${id}"]`).click();
+  await page.getByRole('button', { name: 'Open robot', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+}
+
+test('blank robots create project sources and a conflicting name can be cancelled', async ({ page }) => {
+  await openBuilder(page);
+  await createBlankRobot(page);
+  await expect(page.getByRole('button', { name: 'Rename robot new-robot', exact: true })).toBeVisible();
+  const files = await page.evaluate(() => JSON.parse(localStorage.getItem('test-robot-files')!));
+  expect(files.map((f: any) => f.path)).toEqual(['robots/new-robot/robot.urdf']);
+  expect(new TextDecoder().decode(new Uint8Array(files[0].data))).toContain('base_link');
+  await page.getByRole('button', { name: 'Add robot', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Create blank robot', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Robot folder name', exact: true }).fill('new-robot');
+  await page.getByRole('button', { name: 'Create robot', exact: true }).click();
+  await expect(page.getByRole('dialog').getByRole('alert')).toContainText('already exists');
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Rename robot new-robot', exact: true })).toBeVisible();
+});
+
+test('folder imports preserve all files and select one of multiple URDFs', async ({ page }, testInfo) => {
+  const folder = testInfo.outputPath('bundle');
+  await mkdir(join(folder, 'variants'), { recursive: true });
+  await mkdir(join(folder, 'assets'), { recursive: true });
+  await writeFile(join(folder, 'arm.urdf'), '<robot name="Arm"><link name="base"/></robot>');
+  await writeFile(join(folder, 'variants', 'camera.urdf'), '<robot name="Camera"><link name="base"><visual><geometry><mesh filename="package://old-package/assets/mesh.stl"/></geometry></visual></link></robot>');
+  await writeFile(join(folder, 'assets', 'mesh.stl'), 'solid part\nfacet normal 0 0 1\nouter loop\nvertex 0 0 0\nvertex 1 0 0\nvertex 0 1 0\nendloop\nendfacet\nendsolid part');
+  await writeFile(join(folder, 'README.txt'), 'Keep these source notes.');
+  await openBuilder(page);
+  await page.locator('input[type=file][webkitdirectory]').setInputFiles(folder);
+  await expect(page.getByRole('button', { name: 'Import', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Select bundle/variants/camera.urdf', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Robot folder name', exact: true }).fill('my-arm');
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Rename robot Camera', exact: true })).toBeVisible();
+  const state = await page.evaluate(() => ({
+    files: JSON.parse(localStorage.getItem('test-robot-files')!),
+    robots: JSON.parse(localStorage.getItem('test-project-robots')!).robots,
+  }));
+  expect(state.robots).toHaveLength(2);
+  expect(state.files.some((file: any) => file.path === 'robots/my-arm/README.txt')).toBe(true);
+  const camera = state.files.find((file: any) => file.path === 'robots/my-arm/variants/camera.urdf');
+  expect(new TextDecoder().decode(new Uint8Array(camera.data))).toContain('filename="../assets/mesh.stl"');
+  const arm = state.robots.find((robot: any) => robot.source === 'robots/my-arm/arm.urdf');
+  await chooseProjectRobot(page, arm.id);
+  await expect(page.getByRole('button', { name: 'Rename robot Arm', exact: true })).toBeVisible();
+});
 
 test('assemble, configure, reuse, and reopen immutable versions', async ({ page }) => {
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
@@ -134,13 +231,14 @@ test('assemble, configure, reuse, and reopen immutable versions', async ({ page 
   const terminal = await page.getByRole('region', { name: 'Terminal', exact: true }).boundingBox();
   expect(terminal!.x).toBeGreaterThanOrEqual(menu!.x + menu!.width);
   await page.screenshot({ path: '/tmp/humaan-builder.png' });
-  await page.getByRole('button', { name: 'New', exact: true }).click();
+  await createBlankRobot(page);
   await page.getByRole('combobox', { name: 'Module', exact: true }).selectOption('1');
   await page.getByRole('button', { name: 'Add module', exact: true }).click();
   await expect(page.getByRole('slider')).toHaveCount(1);
-  await page.getByRole('button', { name: 'New', exact: true }).click();
-  await expect(page.getByRole('dialog')).toBeVisible();
-  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await createBlankRobot(page);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  const originalId = await page.evaluate(() => JSON.parse(localStorage.getItem('test-builder-versions')!)[0].version.robotId);
+  await chooseProjectRobot(page, originalId);
   await page.locator('summary').filter({ hasText: 'Saved versions' }).click();
   const versionList = page.getByRole('group', { name: 'Saved versions', exact: true });
   await versionList.getByRole('button', { name: /^Inspection robot/ }).click();
@@ -166,6 +264,63 @@ test('assemble, configure, reuse, and reopen immutable versions', async ({ page 
   expect(errors).toEqual([]);
 });
 
+test('project URDF selection preserves drafts and isolates versions across reloads', async ({ page }) => {
+  await page.addInitScript(() => {
+    if (localStorage.getItem('test-project-robots')) return;
+    localStorage.setItem('test-project-robots', JSON.stringify({
+      activeRobotId: null,
+      robots: [
+        { id: 'arm-a', name: 'arm', source: 'robots/a/arm.urdf', missing: false },
+        { id: 'arm-b', name: 'arm', source: 'robots/b/arm.urdf', missing: false },
+      ],
+    }));
+    localStorage.setItem('test-robot-files', JSON.stringify(['a', 'b'].map(key => ({
+      path: `robots/${key}/arm.urdf`,
+      text: `<robot name="Arm ${key}"><link name="base"><visual><geometry><box size="1 1 1"/></geometry></visual></link></robot>`,
+    }))));
+  });
+  await openBuilder(page);
+  const selector = page.getByRole('button', { name: 'Choose project robot', exact: true });
+  await expect(selector).toContainText('robots/a/arm.urdf');
+  await selector.click();
+  const picker = page.getByRole('dialog');
+  await expect(picker.getByRole('button', { name: 'Grid view', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(picker.getByRole('button', { name: /^Select robots\// })).toHaveCount(2);
+  await expect(picker.getByRole('img', { name: '3D preview of arm.urdf', exact: true })).toHaveCount(2);
+  await picker.getByRole('button', { name: 'List view', exact: true }).click();
+  await picker.getByRole('textbox', { name: 'Search robots', exact: true }).fill('robots/b');
+  await expect(picker.getByRole('button', { name: /^Select robots\// })).toHaveCount(1);
+  await picker.getByRole('button', { name: 'Select robots/b/arm.urdf', exact: true }).click();
+  await expect(picker.getByRole('button', { name: 'Select robots/b/arm.urdf', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await picker.getByRole('textbox', { name: 'Search robots', exact: true }).fill('no-such-robot');
+  await expect(picker).toContainText('No robots match your search.');
+  await picker.getByRole('button', { name: 'Clear search', exact: true }).click();
+  await picker.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(selector).toContainText('robots/a/arm.urdf');
+  await page.getByRole('spinbutton', { name: 'Mass (kg)', exact: true }).fill('3');
+  await page.getByRole('button', { name: /^Save version/ }).click();
+  await expect(page.getByText('Saved Arm a.', { exact: true })).toBeVisible();
+  await page.getByRole('spinbutton', { name: 'Mass (kg)', exact: true }).fill('7');
+  await chooseProjectRobot(page, 'arm-b');
+  await expect(page.getByRole('button', { name: 'Rename robot Arm b', exact: true })).toBeVisible();
+  await page.locator('summary').filter({ hasText: 'Saved versions' }).click();
+  await expect(page.getByRole('group', { name: 'Saved versions', exact: true })).toContainText('No saved versions yet.');
+  await page.getByRole('spinbutton', { name: 'Mass (kg)', exact: true }).fill('9');
+  await chooseProjectRobot(page, 'arm-a');
+  await expect(page.getByRole('spinbutton', { name: 'Mass (kg)', exact: true })).toHaveValue('7');
+  await expect(page.getByRole('group', { name: 'Saved versions', exact: true })).toContainText('Arm a');
+  await chooseProjectRobot(page, 'arm-b');
+  await page.reload();
+  await page.getByRole('button', { name: 'Open project', exact: true }).click();
+  await page.getByRole('button', { name: 'Builder', exact: true }).click();
+  await expect(selector).toContainText('robots/b/arm.urdf');
+  await expect(page.getByRole('spinbutton', { name: 'Mass (kg)', exact: true })).toHaveValue('9');
+  await chooseProjectRobot(page, 'arm-a');
+  await expect(page.getByRole('spinbutton', { name: 'Mass (kg)', exact: true })).toHaveValue('7');
+  const snapshots = await page.evaluate(() => JSON.parse(localStorage.getItem('test-builder-versions')!));
+  expect(snapshots[0].robot.links[0].mass).toBe(3);
+});
+
 test('imports URDF and mesh assets, rejects missing assets without losing the draft', async ({ page }) => {
   await openBuilder(page);
   const xml = '<robot name="Mesh robot"><link name="base"><visual><geometry><mesh filename="mesh.stl"/></geometry></visual><collision><geometry><box size="1 1 1"/></geometry></collision><inertial><mass value="2"/><inertia ixx="1" ixy="0" ixz="0" iyy="1" iyz="0" izz="1"/></inertial></link></robot>';
@@ -188,10 +343,13 @@ test('imports URDF and mesh assets, rejects missing assets without losing the dr
   await page.locator('input[type=file]').first().setInputFiles([{ name: 'robot.urdf', mimeType: 'application/xml', buffer: Buffer.from(xml) }, { name: 'mesh.stl', mimeType: 'model/stl', buffer: Buffer.from(mesh) }]);
   await expect(page.getByRole('dialog').getByRole('alert')).toHaveCount(0);
   await page.getByRole('button', { name: 'Import', exact: true }).click();
+  await expect(page.getByRole('dialog').getByRole('alert')).toContainText('already exists');
+  await page.getByRole('textbox', { name: 'Robot folder name', exact: true }).fill('robot-copy');
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('alert').filter({ hasText: 'Missing mesh' })).toHaveCount(0);
   const snapshots = await page.evaluate(() => JSON.parse(localStorage.getItem('test-builder-versions')!));
-  expect(snapshots[0].robot.assets['mesh.stl'].data).toBe(Buffer.from(mesh).toString('base64'));
+  expect(snapshots[0].robot.assets['robots/robot/mesh.stl'].data).toBe(Buffer.from(mesh).toString('base64'));
 });
 
 test('imports and saves a mimic gripper with only independent preview controls', async ({ page }) => {

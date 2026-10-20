@@ -9,6 +9,9 @@ test('project overview, folder browsing, asset search, and terminal layout', asy
         if (command === 'experience_project') return { root: '/test/project', project: { id: 'test', name: 'Inspection robot' } };
         if (command === 'experience_list') return { records: [], warning: null };
         if (command === 'experience_reviews') return {};
+        if (command === 'builder_project') return { activeRobotId: null, robots: [] };
+        if (command === 'builder_draft_load') return null;
+        if (['builder_activate_robot', 'builder_draft_save'].includes(command)) return;
         if (['learning_set_list', 'builder_list', 'simulation_list', 'deployment_list'].includes(command)) return [];
         if (command === 'simulation_tools_status') return { ready: false, installing: false, phase: 'Not installed' };
         if (command === 'project_create_entry') { localStorage.setItem('created-entry', JSON.stringify(args)); return; }
