@@ -6,6 +6,7 @@
   import Check from '@lucide/svelte/icons/check';
   import { invoke } from '@tauri-apps/api/core';
   import { studio } from '$lib/studio.svelte';
+  import { problemGroups, type Problem } from '$lib/problems.svelte';
   import { Button } from '$lib/components/ui/button/index.js';
   import { Input } from '$lib/components/ui/input/index.js';
   import { NativeSelect } from '$lib/components/ui/native-select/index.js';
@@ -18,13 +19,12 @@
   import BuilderInspector from './BuilderInspector.svelte';
   import { emptyRobot, roots, attach, clone, removeLink, validate, type Robot, type SavedVersion } from '$lib/builder/model';
   import { simulationChecks } from '$lib/simulation/model';
-  import { importUrdf } from '$lib/builder/urdf';
+  import { formatImportNote, importUrdf } from '$lib/builder/urdf';
   import { importedPath, loadProjectUrdf, prepareRobotImport, type ProjectRobot, type ProjectRobots, type RobotDraft } from '$lib/builder/project';
   import Wrench from '@lucide/svelte/icons/wrench';
   import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
   import Play from '@lucide/svelte/icons/play';
   import Eye from '@lucide/svelte/icons/eye';
-  import Move3d from '@lucide/svelte/icons/move-3d';
   import Scan from '@lucide/svelte/icons/scan';
   import Save from '@lucide/svelte/icons/save';
   import Box from '@lucide/svelte/icons/box';
@@ -41,6 +41,7 @@
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
 
   let { root }: { root: string } = $props();
+  const viewControlId = $props.id();
   let robot = $state<Robot>(emptyRobot());
   let saved = $state(JSON.stringify(emptyRobot()));
   let selected = $state('');
@@ -116,9 +117,11 @@
     ...modules.map(module => ({ id: module.id, name: module.name, source: 'Saved modules', detail: `${module.links} links` })),
   ]);
   const visibleParts = $derived(catalog.filter(part => (partSource === 'All' || part.source === partSource) && `${part.name} ${part.detail}`.toLowerCase().includes(query)));
-  let mode = $state<'Assemble' | 'Configure' | 'Test'>('Assemble');
+  type BuilderMode = 'Assemble' | 'Configure' | 'Test';
+  let mode = $state<BuilderMode>('Assemble');
   let collision = $state(false);
   let explode = $state(false);
+  function setMode(next: BuilderMode) { mode = next; if (next === 'Test') explode = false; }
   let positions = $state<Record<string, number>>({});
   let currentVersion = $state('');
   let busy = $state(true), error = $state('');
@@ -136,6 +139,24 @@
   const dirty = $derived(JSON.stringify(robot) !== saved);
   const issues = $derived(validate(robot));
   const physicsChecks = $derived(simulationChecks(robot));
+  let inspector = $state<HTMLElement>();
+  async function revealProblem(linkId?: string) {
+    studio.activeView = 'builder'; section = 'Assembly';
+    if (linkId) selected = linkId;
+    setMode(linkId ? 'Configure' : 'Test');
+    await tick();
+    inspector?.querySelector<HTMLElement>('input, button')?.focus();
+  }
+  $effect(() => {
+    const key = `builder:${root}`;
+    if (!activeRobotId) return;
+    const items: Problem[] = [
+      ...physicsChecks.map((finding, index) => ({ id: `check-${index}`, severity: finding.severity, message: finding.message, source: 'Robot check', reveal: () => { void revealProblem(finding.linkId); } })),
+      ...warnings.map((note, index) => ({ id: `import-${index}`, severity: 'info' as const, message: formatImportNote(note), source: 'URDF import' })),
+    ];
+    problemGroups[key] = { label: `Builder · ${robot.name}`, path: activeProjectRobot?.source || undefined, items };
+    return () => { delete problemGroups[key]; };
+  });
   const selectedIndex = $derived(robot.links.findIndex(l => l.id === selected));
   const selectedLink = $derived(robot.links[selectedIndex]);
   const moduleRoot = $derived(roots(moduleRobot)[0]);
@@ -365,7 +386,7 @@
         <DropdownMenu.Root>
           <DropdownMenu.Trigger disabled={busy} aria-label="Add robot" class="flex h-6 shrink-0 items-center gap-1 rounded px-1 text-xs text-title hover:bg-hover"><FilePlus size={14} />Add robot<ChevronDown size={12} /></DropdownMenu.Trigger>
           <DropdownMenu.Portal>
-            <DropdownMenu.Content align="end" sideOffset={4} class="z-50 min-w-48 rounded-md border border-border bg-surface p-1 shadow-xl">
+            <DropdownMenu.Content align="end" sideOffset={4} class="z-50 min-w-48 rounded-md border border-border bg-popover p-1 shadow-xl">
               <DropdownMenu.Item class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs outline-none data-highlighted:bg-hover" onSelect={beginCreate}><FilePlus size={14} />Create blank robot</DropdownMenu.Item>
               <DropdownMenu.Item class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs outline-none data-highlighted:bg-hover" onSelect={() => filesInput.click()}><FileUp size={14} />Import URDF files…</DropdownMenu.Item>
               <DropdownMenu.Item class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs outline-none data-highlighted:bg-hover" onSelect={() => folderInput.click()}><FolderOpen size={14} />Import folder…</DropdownMenu.Item>
@@ -399,7 +420,7 @@
             <DropdownMenu.Root bind:open={filtersOpen}>
               <DropdownMenu.Trigger class="flex size-6 items-center justify-center rounded hover:bg-hover focus-visible:outline focus-visible:outline-ring {partSource !== 'All' || jointFilter !== 'All' ? 'bg-selection text-title' : 'text-muted'}" aria-label="Builder filters" title="Filters"><Filter size={14} /></DropdownMenu.Trigger>
               <DropdownMenu.Portal>
-                <DropdownMenu.Content align="end" sideOffset={6} class="z-50 w-56 rounded-md border border-border bg-surface p-1 shadow-xl outline-none">
+                <DropdownMenu.Content align="end" sideOffset={6} class="z-50 w-56 rounded-md border border-border bg-popover p-1 shadow-xl outline-none">
                   <DropdownMenu.Group>
                     <DropdownMenu.GroupHeading class="px-2 py-1.5 text-[10px] font-medium uppercase text-muted">Parts · Source</DropdownMenu.GroupHeading>
                     <DropdownMenu.RadioGroup bind:value={partSource}>
@@ -489,10 +510,41 @@
         {:else}
           <button class="h-7 w-40 truncate rounded px-2 text-left text-sm font-medium text-title hover:bg-selection focus-visible:outline-1 focus-visible:outline-ring" aria-label={`Rename robot ${robot.name}`} title="Double-click to rename" disabled={busy} ondblclick={editName} onkeydown={(event) => { if (event.key === 'Enter' || event.key === 'F2') { event.preventDefault(); void editName(); } }}>{robot.name}</button>
         {/if}
-        <nav class="flex gap-1" aria-label="Builder modes">{#each ['Assemble', 'Configure', 'Test'] as const as tab}<Button size="sm" variant="ghost" class={mode === tab ? 'bg-selection text-title' : ''} aria-current={mode === tab ? 'page' : undefined} onclick={() => { mode = tab; if (tab === 'Test') explode = false; }}>{#if tab === 'Assemble'}<Wrench size={14} aria-hidden="true" />{:else if tab === 'Configure'}<SlidersHorizontal size={14} aria-hidden="true" />{:else}<Play size={14} aria-hidden="true" />{/if}{tab}</Button>{/each}</nav>
-        <Button size="sm" variant="ghost" aria-pressed={collision} onclick={() => collision = !collision}>{#if collision}<Scan size={14} aria-hidden="true" />{:else}<Eye size={14} aria-hidden="true" />{/if}{collision ? 'Collision' : 'Visual'}</Button>
-        <Button size="sm" variant="ghost" aria-pressed={explode} disabled={!robot.links.length} class={explode ? 'bg-selection text-title' : ''} onclick={() => { explode = !explode; if (explode && mode === 'Test') mode = 'Assemble'; }}><Move3d size={14} aria-hidden="true" />Explode</Button>
-        <Button size="sm" class="ml-auto" variant="default" disabled={busy || !!issues.length || !dirty} onclick={() => save('versions')}><Save size={14} aria-hidden="true" />{busy ? 'Working…' : dirty ? 'Save version •' : 'Saved'}</Button>
+        <nav class="flex items-center gap-1" aria-label="Builder modes">
+          <span class="mr-2 border-l border-border pl-3 text-[10px] font-medium uppercase tracking-wide text-muted">Workflow</span>
+          {#each ['Assemble', 'Configure', 'Test'] as const as tab}
+            <Button size="sm" variant="ghost" class="h-6 border-0 transition-none focus-visible:ring-offset-0 aria-[current=page]:bg-selection aria-[current=page]:text-title" aria-current={mode === tab ? 'page' : undefined} onclick={() => setMode(tab)}>
+              {#if tab === 'Assemble'}<Wrench size={14} aria-hidden="true" />{:else if tab === 'Configure'}<SlidersHorizontal size={14} aria-hidden="true" />{:else}<Play size={14} aria-hidden="true" />{/if}{tab}
+            </Button>
+          {/each}
+        </nav>
+        <div class="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-3">
+          <div role="group" aria-label="View settings" class="flex flex-wrap items-center gap-3 border-l border-border pl-3">
+            <fieldset aria-label="Geometry display" class="m-0 flex min-w-0 items-center gap-2 border-0 p-0">
+              <span class="flex items-center gap-1.5 text-xs text-muted" aria-hidden="true">{#if collision}<Scan size={13} />{:else}<Eye size={13} />{/if}Geometry</span>
+              <div class="inline-flex gap-0.5 rounded-md border border-border bg-background p-0.5">
+                {#each [{ label: 'Visual', value: false }, { label: 'Collision', value: true }] as option}
+                  <label class="relative block">
+                    <input type="radio" name={`${viewControlId}-geometry`} value={option.label} checked={collision === option.value} onchange={() => collision = option.value} class="peer absolute inset-0 m-0 h-full w-full cursor-pointer opacity-0" />
+                    <span class="pointer-events-none flex h-6 items-center rounded px-2 text-xs text-muted peer-checked:bg-selection peer-checked:font-medium peer-checked:text-title peer-focus-visible:ring-2 peer-focus-visible:ring-ring">{option.label}</span>
+                  </label>
+                {/each}
+              </div>
+            </fieldset>
+            <fieldset aria-label="Model view" disabled={!robot.links.length || mode === 'Test'} title={mode === 'Test' ? 'Joint preview uses the normal view.' : 'Choose how to inspect the assembly.'} class="m-0 flex min-w-0 items-center gap-2 border-0 p-0">
+              <span class="text-xs text-muted" aria-hidden="true">View</span>
+              <div class="inline-flex gap-0.5 rounded-md border border-border bg-background p-0.5">
+                {#each [{ label: 'Normal', value: false }, { label: 'Exploded', value: true }] as option}
+                  <label class="relative block">
+                    <input type="radio" name={`${viewControlId}-view`} value={option.label} checked={explode === option.value} onchange={() => explode = option.value} class="peer absolute inset-0 m-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-default" />
+                    <span class="pointer-events-none flex h-6 items-center rounded px-2 text-xs text-muted peer-checked:bg-selection peer-checked:font-medium peer-checked:text-title peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-disabled:opacity-45">{option.label}</span>
+                  </label>
+                {/each}
+              </div>
+            </fieldset>
+          </div>
+          <Button size="sm" variant="default" disabled={busy || !!issues.length || !dirty} onclick={() => save('versions')}><Save size={14} aria-hidden="true" />{busy ? 'Working…' : dirty ? 'Save version •' : 'Saved'}</Button>
+        </div>
         {:else}
           <Button size="sm" variant="ghost" onclick={() => section = 'Assembly'}><ArrowLeft size={14} />Assembly</Button>
           <span class="min-w-0 truncate text-xs font-medium text-title">{section === 'Catalog' ? 'Parts catalog' : moduleRobot.links.length ? moduleRobot.name : 'Part preview'}</span>
@@ -509,7 +561,7 @@
             </div>
             <div class="min-h-0 flex-1 overflow-auto p-4">
               <div class="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
-                {#each visibleParts as part (part.id)}<button class="group flex flex-col overflow-hidden rounded-lg border border-border bg-[#181818] text-left transition-colors hover:border-muted focus-visible:outline focus-visible:outline-ring" disabled={busy} aria-label={`Preview ${part.name}`} onclick={() => chooseModule(part.id)}>
+                {#each visibleParts as part (part.id)}<button class="group flex flex-col overflow-hidden rounded-lg border border-border bg-background text-left transition-colors hover:border-muted focus-visible:outline focus-visible:outline-ring" disabled={busy} aria-label={`Preview ${part.name}`} onclick={() => chooseModule(part.id)}>
                   <PartThumbnail name={part.name} load={() => loadPart(part.id)} />
                   <div class="w-full p-3"><span class="block truncate text-sm font-medium text-title" title={part.name}>{part.name}</span><span class="mt-1 block text-xs text-muted">{part.source}</span><span class="mt-2 block text-xs text-muted">{part.detail}</span><span class="mt-3 flex items-center gap-1 text-xs text-title">View 3D &amp; details<ChevronRight size={12} /></span></div>
                 </button>{/each}
@@ -536,10 +588,11 @@
           {/if}
         {:else}
         <BuilderViewport {robot} {selected} {collision} {explode} allowGroundPlacement={mode !== 'Test'} onplacement={position => { if (position.every(v => Math.abs(v) < 1e-8)) delete robot.placement; else robot.placement = position; }} positions={mode === 'Test' ? positions : {}} onselect={id => selected = id} />
-        <aside aria-label={mode === 'Test' ? 'Assembly checks' : 'Component properties'} class="w-64 min-w-0 shrink-0 overflow-y-auto border-l border-border bg-surface">
+        {#if mode !== 'Assemble'}
+        <aside bind:this={inspector} aria-label={mode === 'Test' ? 'Assembly checks' : 'Component properties'} class="w-64 min-w-0 shrink-0 overflow-y-auto border-l border-border bg-surface">
           {#if mode === 'Test'}
             <div class="flex flex-col gap-3 p-3 text-xs"><h3 class="font-medium text-title">Assembly checks</h3><p class="text-muted">Preview joint movement here. Launch physics from a saved version in Simulation.</p>
-            {#each physicsChecks as issue}<button class="text-left {issue.severity === 'error' ? 'text-error' : 'text-warning'}" onclick={() => { if (issue.linkId) { selected = issue.linkId; mode = 'Configure'; } }}>{issue.message}</button>{:else}<p class="text-success">Assembly is ready for simulation.</p>{/each}
+            {#each physicsChecks as issue}<button class="text-left {issue.severity === 'error' ? 'text-error' : 'text-warning'}" onclick={() => { if (issue.linkId) { selected = issue.linkId; setMode('Configure'); } }}>{issue.message}</button>{:else}<p class="text-success">Assembly is ready for simulation.</p>{/each}
             <Button size="sm" disabled={busy || dirty || !currentVersion} onclick={() => { studio.simulationVersion = currentVersion; studio.activeView = 'simulation'; }}>Open in Simulation</Button>
             {#if dirty || !currentVersion}<p class="text-muted">Save a version before opening Simulation.</p>{/if}
             {#each robot.joints.filter(j => j.type !== 'fixed' && !j.mimic) as joint}<label class="flex flex-col gap-2">{joint.name} · {(positions[joint.id] || 0).toFixed(2)} {joint.type === 'prismatic' ? 'm' : 'rad'}<input type="range" min={joint.type === 'continuous' ? -Math.PI : joint.lower} max={joint.type === 'continuous' ? Math.PI : joint.upper} step="0.001" value={positions[joint.id] || 0} oninput={event => positions[joint.id] = event.currentTarget.valueAsNumber} /></label>{/each}
@@ -550,9 +603,8 @@
           {:else}<p class="p-4 text-xs text-muted">Select a link to configure its geometry, physical properties, mounting points, and sensors.</p>{/if}
         </aside>
         {/if}
+        {/if}
       </div>
-      {#if section === 'Assembly' && warnings.length}<details class="max-h-32 shrink-0 overflow-auto border-t border-border px-3 py-2 text-xs text-warning"><summary class="cursor-pointer">Import notes ({warnings.length})</summary>{#each warnings as warning}<p class="mt-2">{warning}</p>{/each}</details>{/if}
-      {#if section === 'Assembly' && issues.length && robot.links.length && mode !== 'Test'}<button class="shrink-0 border-t border-border px-3 py-2 text-left text-xs text-warning" onclick={() => { mode = 'Test'; explode = false; }}>{issues.length} assembly issue{issues.length === 1 ? '' : 's'} · Review in Test</button>{/if}
     </div>
   </WorkspaceColumn>
 </div>

@@ -160,6 +160,15 @@ pub async fn deployment_load(root: String, kind: String, id: String) -> Result<V
         .await
         .map_err(|e| e.to_string())?
 }
+fn delete_session(root: &str, id: &str) -> Result<(), String> {
+    fs::remove_file(path(root, "sessions", id)?).map_err(|e| e.to_string())
+}
+#[tauri::command]
+pub async fn deployment_delete_session(root: String, id: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || delete_session(&root, &id))
+        .await
+        .map_err(|e| e.to_string())?
+}
 #[tauri::command]
 pub async fn deployment_list(root: String, kind: String) -> Result<Vec<Value>, String> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -259,6 +268,14 @@ mod tests {
         );
         session["frames"][1]["time"] = json!(0.0);
         assert!(save(root, "sessions", session).is_err());
+        let id = saved["id"].as_str().unwrap();
+        assert!(delete_session(root, "../robots").is_err());
+        assert!(delete_session(root, profile["id"].as_str().unwrap()).is_err());
+        assert!(load(root, "sessions", id).is_ok());
+        delete_session(root, id).unwrap();
+        assert!(load(root, "sessions", id).is_err());
+        assert!(load(root, "robots", profile["id"].as_str().unwrap()).is_ok());
+        assert!(delete_session(root, id).is_err());
     }
     #[test]
     fn telemetry_reads_finite_newline_packet_without_sending_commands() {

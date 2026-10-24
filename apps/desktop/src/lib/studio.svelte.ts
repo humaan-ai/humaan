@@ -33,4 +33,5 @@ export const studio = $state({
   simulationVersion: '',
   terminalOpen: false,
   terminalHeight: 200,
+  bottomPanelTab: 'terminal',
 });

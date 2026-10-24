@@ -112,7 +112,7 @@
                 : featuredVersion ? `${featuredVersion.links} links · Saved ${date(featuredVersion.savedAt)}` : versions === null ? 'Open Builder to inspect your assembly and saved versions.' : 'Add a robot or place a URDF and its meshes in robots/.'}</p>
               <Button class="mt-auto" disabled={loading || openingRobot} onclick={continueInBuilder}><Box size={14} />{featuredName ? 'Continue in Builder' : 'Open Builder'}<ArrowRight size={14} /></Button>
             </div>
-            <div class="flex min-h-44 items-center justify-center border-t border-border bg-[#181818] @min-[600px]:border-l @min-[600px]:border-t-0">
+            <div class="flex min-h-44 items-center justify-center border-t border-border bg-background @min-[600px]:border-l @min-[600px]:border-t-0">
               {#if featuredName}{#key `${project.root}-${featuredRobot?.id || featuredVersion?.id}-${revision}`}<PartThumbnail name={featuredName} load={loadFeaturedRobot} />{/key}{:else}<div class="flex h-28 w-28 items-center justify-center rounded-full border border-[#303030] bg-[#1d1d1d]"><RobotArm size={56} strokeWidth={1} class="text-[#737373]" /></div>{/if}
             </div>
           </div>

@@ -13,6 +13,8 @@
   import FolderPlus from "@lucide/svelte/icons/folder-plus";
   import { onDestroy, tick } from "svelte";
   import ProjectFileTree from "./ProjectFileTree.svelte";
+  import ProjectFileMenu from "./ProjectFileMenu.svelte";
+  import { canDeleteProjectFile, type ProjectEntry as Entry } from '$lib/project-files';
   import ChevronRight from "@lucide/svelte/icons/chevron-right";
   import X from "@lucide/svelte/icons/x";
   import { invoke } from "@tauri-apps/api/core";
@@ -28,7 +30,6 @@
   import WorkspaceColumn from "./WorkspaceColumn.svelte";
 
   let { project }: { project: LocalProject } = $props();
-  type Entry = { name: string; path: string; directory: boolean; size: number; kind: string };
   const sections = [{ id: 'overview', label: 'Overview', icon: LayoutDashboard }, { id: 'files', label: 'Files', icon: Files }, { id: 'assets', label: 'Assets', icon: Boxes }] as const;
   let section = $state<'overview' | 'files' | 'assets'>('overview');
   let treeRevision = $state(0);
@@ -38,6 +39,12 @@
   let createError = $state('');
   let createBusy = $state(false);
   let nameInput = $state<HTMLInputElement | null>(null);
+  let refreshButton = $state<HTMLButtonElement | null>(null);
+  let deleteTarget = $state<Entry | null>(null);
+  let deleteBusy = $state(false);
+  let deleteError = $state('');
+  let deleteTrigger: HTMLButtonElement | null = null;
+  let deleteSucceeded = false;
   async function startCreate(kind: 'file' | 'folder') {
     creating = kind; newName = ''; createError = ''; rootExpanded = true;
     await tick(); nameInput?.focus();
@@ -89,7 +96,8 @@
   const active = $derived(tabs.find(tab => tab.path === activePath));
   const dirty = $derived(tabs.some(tab => tab.content !== tab.saved));
   const working = $derived(tabs.some(tab => tab.saving || tab.loading));
-  $effect(() => { studio.editorDirty = dirty; studio.editorBusy = working || createBusy; });
+  const deleteHasEdits = $derived(tabs.some(tab => tab.path === deleteTarget?.path && tab.content !== tab.saved));
+  $effect(() => { studio.editorDirty = dirty; studio.editorBusy = working || createBusy || deleteBusy; });
   onDestroy(() => { studio.editorDirty = false; studio.editorBusy = false; });
   async function openFile(entry: Entry) {
     activePath = entry.path;
@@ -103,7 +111,7 @@
     finally { tab.loading = false; }
   }
   async function save(tab: Editor) {
-    if (tab.readOnly || tab.failed || tab.loading || tab.saving || tab.content === tab.saved) return;
+    if (tab.readOnly || tab.failed || tab.loading || tab.saving || tab.content === tab.saved || (deleteBusy && tab.path === deleteTarget?.path)) return;
     const content = tab.content;
     tab.saving = true; tab.error = '';
     try {
@@ -120,10 +128,27 @@
     tabs.splice(index, 1); closing = '';
     if (activePath === path) activePath = tabs[Math.min(index, tabs.length - 1)]?.path ?? '';
   }
+  function requestDelete(entry: Entry, trigger: HTMLButtonElement | null) {
+    if (deleteBusy || working || !canDeleteProjectFile(entry)) return;
+    deleteTarget = entry; deleteTrigger = trigger; deleteError = ''; deleteSucceeded = false;
+  }
+  async function deleteFile() {
+    if (!deleteTarget || deleteBusy || working) return;
+    const path = deleteTarget.path;
+    deleteBusy = true; deleteError = '';
+    try {
+      await invoke('project_delete_file', { root: project.root, path });
+      close(path, true);
+      entries = entries.filter(entry => entry.path !== path);
+      treeRevision += 1;
+      deleteSucceeded = true; deleteTarget = null;
+    } catch (cause) { deleteError = String(cause); }
+    finally { deleteBusy = false; }
+  }
 
 </script>
 
-<svelte:window onbeforeunload={(event) => { if (dirty || working || createBusy) { event.preventDefault(); event.returnValue = ''; } }} onkeydown={(event) => { if (studio.activeView === 'project' && !(studio.chatOpen && studio.chatExpanded) && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's' && active && section !== 'overview') { event.preventDefault(); void save(active); } }} />
+<svelte:window onbeforeunload={(event) => { if (dirty || working || createBusy || deleteBusy) { event.preventDefault(); event.returnValue = ''; } }} onkeydown={(event) => { if (studio.activeView === 'project' && !(studio.chatOpen && studio.chatExpanded) && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's' && active && section !== 'overview') { event.preventDefault(); void save(active); } }} />
 
 <div class="flex h-full min-h-0 gap-1">
   <StudioSidebar title="Project">
@@ -143,7 +168,7 @@
           <div class="flex shrink-0 opacity-0 group-hover/explorer:opacity-100 group-focus-within/explorer:opacity-100">
             <button class="rounded p-1 text-muted hover:bg-selection hover:text-title" aria-label="New file" title="New File" disabled={createBusy} onclick={() => startCreate('file')}><FilePlus size={15} /></button>
             <button class="rounded p-1 text-muted hover:bg-selection hover:text-title" aria-label="New folder" title="New Folder" disabled={createBusy} onclick={() => startCreate('folder')}><FolderPlus size={15} /></button>
-            <button class="rounded p-1 text-muted hover:bg-selection hover:text-title" aria-label="Refresh files" title="Refresh" onclick={() => treeRevision += 1}><RefreshCw size={15} /></button>
+            <button bind:this={refreshButton} class="rounded p-1 text-muted hover:bg-selection hover:text-title" aria-label="Refresh files" title="Refresh" onclick={() => treeRevision += 1}><RefreshCw size={15} /></button>
           </div>
         </div>
         {#if creating}
@@ -154,13 +179,13 @@
           </form>
         {/if}
         <div class="min-h-0 flex-1 overflow-auto">
-          {#if rootExpanded}{#key treeRevision}<ProjectFileTree root={project.root} {activePath} onopen={openFile} />{/key}{/if}
+          {#if rootExpanded}<ProjectFileTree root={project.root} {activePath} onopen={openFile} ondelete={requestDelete} revision={treeRevision} deleting={deleteBusy || working} />{/if}
         </div>
       </div>
     {:else if section === 'assets'}
         <div class="flex shrink-0 flex-wrap items-center gap-2 border-b border-border p-3">
           <span class="flex-1 text-xs text-muted">Asset files across this project</span>
-          <button class="rounded p-1 text-muted hover:bg-selection" aria-label="Refresh assets" title="Refresh" disabled={busy} onclick={load}><RefreshCw size={15} /></button>
+          <button bind:this={refreshButton} class="rounded p-1 text-muted hover:bg-selection" aria-label="Refresh assets" title="Refresh" disabled={busy} onclick={load}><RefreshCw size={15} /></button>
           <div class="relative w-full min-w-0">
             <Input class="w-full pr-9" aria-label="Search assets" placeholder="Search assets…" bind:value={query} />
             <DropdownMenu.Root>
@@ -170,7 +195,7 @@
                 {#if assetType !== 'All'}<span class="absolute right-0.5 top-0.5 size-1 rounded-full bg-current" aria-hidden="true"></span>{/if}
               </DropdownMenu.Trigger>
               <DropdownMenu.Portal>
-                <DropdownMenu.Content align="end" sideOffset={6} class="z-50 w-48 rounded-md border border-border bg-surface p-1 shadow-xl outline-none">
+                <DropdownMenu.Content align="end" sideOffset={6} class="z-50 w-48 rounded-md border border-border bg-popover p-1 shadow-xl outline-none">
                   <DropdownMenu.Group>
                     <DropdownMenu.GroupHeading class="px-2 py-1.5 text-[10px] font-medium uppercase text-muted">Asset type</DropdownMenu.GroupHeading>
                     <DropdownMenu.RadioGroup bind:value={assetType}>
@@ -196,11 +221,11 @@
           {:else}
             <ul class="space-y-0.5">
               {#each filtered as entry (entry.path)}
-                <li><button class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left hover:bg-selection focus-visible:outline-2 focus-visible:outline-ring {activePath === entry.path ? 'bg-selection' : ''}" onclick={() => void openFile(entry)}>
+                <li><ProjectFileMenu {entry} disabled={deleteBusy || working} ondelete={requestDelete}><button class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left hover:bg-selection focus-visible:outline-2 focus-visible:outline-ring {activePath === entry.path ? 'bg-selection' : ''}" onclick={() => void openFile(entry)}>
                   {#if entry.directory}<Folder size={16} class="shrink-0 text-muted" />{:else}<File size={16} class="shrink-0 text-muted" />{/if}
                   <span class="min-w-0 flex-1"><span class="block truncate text-sm text-title">{entry.name}</span>{#if section === 'assets'}<span class="block truncate text-xs text-muted">{entry.path}</span>{/if}</span>
                   
-                </button></li>
+                </button></ProjectFileMenu></li>
               {/each}
             </ul>
           {/if}
@@ -208,20 +233,20 @@
     {/if}
   </StudioSidebar>
   <WorkspaceColumn active={studio.activeView === 'project'}>
-    <section class="workbench-panel flex min-h-0 flex-1 flex-col overflow-hidden" style:background={section === 'overview' ? undefined : '#181818'} aria-label="Project workspace">
+    <section class="workbench-panel flex min-h-0 flex-1 flex-col overflow-hidden {section !== 'overview' ? 'bg-editor' : ''}" aria-label="Project workspace">
       {#if section !== 'files' || tabs.length > 0}
-      <header class="flex h-[35px] shrink-0 items-center bg-[#222222] pr-2 shadow-[inset_0_-1px_0_var(--color-border)]">
+      <header class="flex h-[35px] shrink-0 items-center bg-surface pr-2 shadow-[inset_0_-1px_0_var(--color-border)]">
         {#if section !== 'files'}<h1 class="flex h-full w-28 shrink-0 items-center border-r border-border px-4 text-sm font-medium text-title">{sections.find(item => item.id === section)?.label}</h1>{/if}
         {#if section !== 'overview' && tabs.length}
           <div class="flex h-full min-w-0 flex-1 items-stretch overflow-x-auto" aria-label="Open files">
             {#each tabs as tab, index (tab.path)}
-              <div class="group/tab flex h-full shrink-0 items-center rounded-tr-lg {index === 0 ? 'rounded-tl-none border-l-0' : '-ml-px rounded-tl-lg'} border border-y-0 {activePath === tab.path ? 'relative z-10 border-border bg-[#181818] text-[#e0e0e0]' : 'border-transparent bg-[#222222] text-muted shadow-[inset_0_-1px_0_var(--color-border)] hover:bg-[#292929]'}">
+              <div class="group/tab flex h-full shrink-0 items-center rounded-tr-lg {index === 0 ? 'rounded-tl-none border-l-0' : '-ml-px rounded-tl-lg'} border border-y-0 {activePath === tab.path ? 'relative z-10 border-border bg-editor text-title' : 'border-transparent bg-surface text-muted shadow-[inset_0_-1px_0_var(--color-border)] hover:bg-hover'}">
                 <button class="flex h-full max-w-64 min-w-0 items-center gap-2 px-3 py-2 text-xs" title={tab.path} aria-pressed={activePath === tab.path} onclick={() => activePath = tab.path}><FileCode size={14} class="shrink-0 text-[#75bad3]" aria-hidden="true" /><span class="truncate">{tab.name}</span></button>
                 <div class="relative mr-2 h-5 w-5 shrink-0">
                   {#if activePath !== tab.path && tab.content !== tab.saved}
                     <span class="pointer-events-none absolute inset-0 flex items-center justify-center group-hover/tab:invisible group-focus-within/tab:invisible"><span class="h-2.5 w-2.5 rounded-full bg-white" aria-label="Unsaved changes"></span></span>
                   {/if}
-                  <button class="flex h-5 w-5 items-center justify-center rounded hover:bg-background {activePath === tab.path ? '' : 'opacity-0 group-hover/tab:opacity-100 group-focus-within/tab:opacity-100'}" aria-label={`Close ${tab.name}`} title={tab.content !== tab.saved ? 'Unsaved changes · Close file' : 'Close file'} disabled={tab.saving || tab.loading} onclick={() => close(tab.path)}>
+                  <button class="flex h-5 w-5 items-center justify-center rounded hover:bg-hover {activePath === tab.path ? '' : 'opacity-0 group-hover/tab:opacity-100 group-focus-within/tab:opacity-100'}" aria-label={`Close ${tab.name}`} title={tab.content !== tab.saved ? 'Unsaved changes · Close file' : 'Close file'} disabled={tab.saving || tab.loading} onclick={() => close(tab.path)}>
                     {#if activePath === tab.path && tab.content !== tab.saved}<span class="h-2.5 w-2.5 rounded-full bg-white" aria-label="Unsaved changes"></span>{:else}<X size={12} />{/if}
                   </button>
                 </div>
@@ -263,6 +288,22 @@
       <div class="mt-4 flex justify-end gap-2">
         <Button variant="outline" onclick={() => closing = ''}>Keep editing</Button>
         <Button variant="destructive" onclick={() => close(closing, true)}>Discard changes</Button>
+      </div>
+    </Dialog.Content>
+  {/if}
+</Dialog.Root>
+
+<Dialog.Root open={!!deleteTarget} onOpenChange={(open) => { if (!open && !deleteBusy) deleteTarget = null; }}>
+  {#if deleteTarget}
+    <Dialog.Content showCloseButton={!deleteBusy} escapeKeydownBehavior={deleteBusy ? 'ignore' : 'close'} interactOutsideBehavior={deleteBusy ? 'ignore' : 'close'}
+      onCloseAutoFocus={(event) => { event.preventDefault(); (deleteSucceeded ? refreshButton : deleteTrigger ?? refreshButton)?.focus(); }}>
+      <Dialog.Title>Delete file?</Dialog.Title>
+      <Dialog.Description>Permanently delete <span class="break-all font-medium text-title">{deleteTarget.path}</span>? This cannot be undone.</Dialog.Description>
+      {#if deleteHasEdits}<p class="mt-3 text-xs text-warning">This file has unsaved changes. Deleting it will also discard those edits.</p>{/if}
+      {#if deleteError}<p role="alert" class="mt-3 break-words text-xs text-error">{deleteError}</p>{/if}
+      <div class="mt-4 flex justify-end gap-2">
+        <Button variant="outline" disabled={deleteBusy} onclick={() => deleteTarget = null}>Cancel</Button>
+        <Button variant="destructive" disabled={deleteBusy || working} onclick={deleteFile}>{deleteBusy ? 'Deleting…' : 'Delete file'}</Button>
       </div>
     </Dialog.Content>
   {/if}

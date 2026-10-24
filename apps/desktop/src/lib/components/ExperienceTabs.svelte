@@ -20,10 +20,10 @@
   }
 </script>
 
-<div class="flex h-[35px] shrink-0 items-center bg-[#222222] shadow-[inset_0_-1px_0_var(--color-border)]">
+<div class="flex h-[35px] shrink-0 items-center bg-surface shadow-[inset_0_-1px_0_var(--color-border)]">
   <div role="tablist" tabindex={-1} aria-label="Workspace tabs" class="flex h-full min-w-0 overflow-x-auto" onkeydown={navigate}>
     {#each tabs as tab, index}
-      <div role="presentation" class="group/tab flex h-full max-w-64 shrink-0 items-center rounded-tr-lg {index === 0 ? 'rounded-tl-none border-l-0' : '-ml-px rounded-tl-lg'} border border-y-0 {active === tab.id ? 'relative z-10 border-border bg-background text-title' : 'border-transparent bg-[#222222] text-muted shadow-[inset_0_-1px_0_var(--color-border)] hover:bg-[#292929]'}">
+      <div role="presentation" class="group/tab flex h-full max-w-64 shrink-0 items-center rounded-tr-lg {index === 0 ? 'rounded-tl-none border-l-0' : '-ml-px rounded-tl-lg'} border border-y-0 {active === tab.id ? 'relative z-10 border-border bg-selection text-title' : 'border-transparent bg-surface text-muted shadow-[inset_0_-1px_0_var(--color-border)] hover:bg-hover'}">
         <button role="tab" id="experience-tab-{tab.id}" aria-controls="experience-panel-{tab.id}" aria-selected={active === tab.id} tabindex={active === tab.id ? 0 : -1}
           class="flex h-full min-w-0 flex-1 items-center gap-2 px-3 text-xs focus-visible:outline-1 focus-visible:outline-ring focus-visible:-outline-offset-2"
           title={tab.label} onclick={() => onselect(tab.id)}>

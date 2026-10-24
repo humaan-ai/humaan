@@ -129,6 +129,7 @@ pub fn run() {
             deployments::deployment_load,
             deployments::deployment_save,
             deployments::deployment_sample,
+            deployments::deployment_delete_session,
             builder::builder_list,
             builder_project::builder_project,
             builder_project::builder_add_robot,
@@ -143,6 +144,7 @@ pub fn run() {
             builder::builder_delete_version,
             project_browser::project_entries,
             project_browser::project_create_entry,
+            project_browser::project_delete_file,
             project_browser::project_read_file,
             project_browser::project_save_file,
             select_directory

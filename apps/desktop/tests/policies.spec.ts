@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test('policies register controllers, block incompatible assignments, restore history, and replay', async ({ page }) => {
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));

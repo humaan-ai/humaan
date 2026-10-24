@@ -28,6 +28,23 @@ fn asset_kind(path: &Path) -> Option<&'static str> {
         _ => None,
     }
 }
+fn system_metadata(name: &str) -> bool {
+    name.starts_with("._")
+        || matches!(
+            name.to_ascii_lowercase().as_str(),
+            ".ds_store"
+                | ".appledouble"
+                | ".lsoverride"
+                | ".spotlight-v100"
+                | ".trashes"
+                | ".fseventsd"
+                | "thumbs.db"
+                | "ehthumbs.db"
+                | "desktop.ini"
+                | "$recycle.bin"
+                | "system volume information"
+        )
+}
 fn list(root: &str, directory: &str, assets: bool) -> Result<Listing, String> {
     let (root, _) = humaan_engine::project::discover(Path::new(root))
         .map_err(|e| e.to_string())?
@@ -67,6 +84,9 @@ fn list(root: &str, directory: &str, assets: bool) -> Result<Listing, String> {
             }
             let path = item.path();
             let name = item.file_name().to_string_lossy().into_owned();
+            if system_metadata(&name) {
+                continue;
+            }
             if assets && ty.is_dir() {
                 if !matches!(name.as_str(), ".git" | "node_modules" | "target" | ".venv") {
                     pending.push(path);
@@ -164,9 +184,10 @@ fn read_text(path: &Path) -> Result<String, String> {
         .map_err(|_| "This file is not UTF-8 text. Binary files need a dedicated viewer.".into())
 }
 fn managed(path: &str) -> bool {
-    Path::new(path)
-        .components()
-        .any(|c| c.as_os_str() == ".humaan" || c.as_os_str() == ".git")
+    Path::new(path).components().any(|c| {
+        let name = c.as_os_str().to_string_lossy();
+        name.eq_ignore_ascii_case(".humaan") || name.eq_ignore_ascii_case(".git")
+    })
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -226,6 +247,22 @@ pub async fn project_save_file(
         .map_err(|e| e.to_string())?
 }
 
+fn delete_file(root: &str, path: &str) -> Result<(), String> {
+    if managed(path) {
+        return Err("Project-managed files cannot be deleted from the file explorer.".into());
+    }
+    // Use the same project boundary and symlink checks as the editor. Only
+    // regular files can be deleted; this command never removes directories.
+    let target = file_path(root, path)?;
+    fs::remove_file(target).map_err(|e| e.to_string())
+}
+#[tauri::command]
+pub async fn project_delete_file(root: String, path: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || delete_file(&root, &path))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 fn create_entry(root: &str, name: &str, directory: bool) -> Result<(), String> {
     if name.is_empty()
         || name.trim() != name
@@ -276,6 +313,109 @@ pub async fn project_create_entry(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn hides_system_metadata_but_keeps_project_dotfiles() {
+        let temp = tempfile::tempdir().unwrap();
+        humaan_engine::project::init(temp.path(), "Metadata").unwrap();
+        let root = temp.path().to_str().unwrap();
+        fs::create_dir(temp.path().join("meshes")).unwrap();
+        for name in [".DS_Store", "._base.stl", "Thumbs.db", "desktop.ini"] {
+            fs::write(temp.path().join(name), "metadata").unwrap();
+            fs::write(temp.path().join("meshes").join(name), "metadata").unwrap();
+        }
+        for name in [".Spotlight-V100", "$RECYCLE.BIN", ".AppleDouble"] {
+            fs::create_dir(temp.path().join(name)).unwrap();
+            fs::write(temp.path().join(name).join("cached.stl"), "metadata").unwrap();
+        }
+        for name in [".gitignore", ".env", "meshes/base.stl"] {
+            fs::write(temp.path().join(name), "project file").unwrap();
+        }
+        let files = list(root, "", false).unwrap();
+        assert!(files
+            .entries
+            .iter()
+            .all(|entry| !system_metadata(&entry.name)));
+        for name in [".gitignore", ".env", ".humaan"] {
+            assert!(files.entries.iter().any(|entry| entry.name == name));
+        }
+        let nested = list(root, "meshes", false).unwrap();
+        assert_eq!(nested.entries.len(), 1);
+        assert_eq!(nested.entries[0].path, "meshes/base.stl");
+        let assets = list(root, "", true).unwrap();
+        assert_eq!(assets.entries.len(), 1);
+        assert_eq!(assets.entries[0].path, "meshes/base.stl");
+    }
+    #[test]
+    fn deletes_only_regular_unmanaged_files_inside_project() {
+        let temp = tempfile::tempdir().unwrap();
+        humaan_engine::project::init(temp.path(), "Delete").unwrap();
+        let root = temp.path().to_str().unwrap();
+        fs::create_dir(temp.path().join("meshes")).unwrap();
+        fs::write(temp.path().join("meshes/base.stl"), [0, 1, 2]).unwrap();
+        fs::write(temp.path().join("keep.txt"), "keep").unwrap();
+        fs::create_dir(temp.path().join(".git")).unwrap();
+        fs::write(temp.path().join(".git/config"), "keep").unwrap();
+        delete_file(root, "meshes/base.stl").unwrap();
+        assert!(!temp.path().join("meshes/base.stl").exists());
+        let outside = tempfile::NamedTempFile::new().unwrap();
+        let traversal = format!(
+            "../{}",
+            outside.path().file_name().unwrap().to_str().unwrap()
+        );
+        for path in [
+            "",
+            ".",
+            "meshes",
+            ".humaan/project.json",
+            ".HUMAAN/project.json",
+            ".git/config",
+            ".GIT/config",
+            "meshes/../keep.txt",
+            &traversal,
+            outside.path().to_str().unwrap(),
+        ] {
+            assert!(delete_file(root, path).is_err(), "must reject {path}");
+        }
+        assert!(outside.path().exists());
+        assert!(temp.path().join(".humaan/project.json").exists());
+        assert!(temp.path().join("meshes").is_dir());
+        assert_eq!(
+            fs::read_to_string(temp.path().join("keep.txt")).unwrap(),
+            "keep"
+        );
+        assert_eq!(
+            fs::read_to_string(temp.path().join(".git/config")).unwrap(),
+            "keep"
+        );
+        assert!(delete_file(root, "meshes/base.stl").is_err());
+        #[cfg(unix)]
+        {
+            let external = tempfile::tempdir().unwrap();
+            fs::write(external.path().join("keep.txt"), "external").unwrap();
+            std::os::unix::fs::symlink(external.path(), temp.path().join("outside")).unwrap();
+            std::os::unix::fs::symlink(
+                external.path().join("keep.txt"),
+                temp.path().join("link.txt"),
+            )
+            .unwrap();
+            std::os::unix::fs::symlink(
+                temp.path().join("keep.txt"),
+                temp.path().join("internal.txt"),
+            )
+            .unwrap();
+            for path in ["outside/keep.txt", "link.txt", "internal.txt"] {
+                assert!(delete_file(root, path).is_err());
+            }
+            assert_eq!(
+                fs::read_to_string(external.path().join("keep.txt")).unwrap(),
+                "external"
+            );
+            assert_eq!(
+                fs::read_to_string(temp.path().join("keep.txt")).unwrap(),
+                "keep"
+            );
+        }
+    }
     #[test]
     fn creates_without_overwriting_or_escaping_project() {
         let temp = tempfile::tempdir().unwrap();

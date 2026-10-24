@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 test('recent projects persist, reopen directly, and can be removed without touching files', async ({ page }) => {
   await page.addInitScript(() => {
     (window as any).__TAURI_INTERNALS__ = { transformCallback: () => 1, unregisterCallback: () => {}, invoke: async (command: string, args: any) => {
@@ -10,6 +10,8 @@ test('recent projects persist, reopen directly, and can be removed without touch
       }
       if (command === 'experience_list') return {records:[],warning:null};
       if (command === 'experience_reviews') return {};
+      if (command === 'builder_project') return { activeRobotId: null, robots: [] };
+      if (command === 'builder_draft_load') return null;
       if (command === 'project_entries') return {entries:[],truncated:false};
       if (command === 'simulation_tools_status') return {ready:false,installing:false,phase:'Not installed'};
       return [];

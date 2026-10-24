@@ -2,14 +2,14 @@
 @import "tw-animate-css";
 @custom-variant dark (&:is(.dark *));
 
-/* VS Code modern dark workbench surfaces. */
+/* Shared Humaan dark palette: workspace, chrome, raised controls, selection. */
 @theme {
   --color-primary: #4c9df3;
   --color-primary-foreground: #ffffff;
-  --color-secondary: #252526;
+  --color-secondary: var(--color-raised);
   --color-secondary-foreground: #f0f0f0;
   --color-muted-foreground: #9d9d9d;
-  --color-popover: #1f1f1f;
+  --color-popover: var(--color-raised);
   --color-popover-foreground: #f0f0f0bd;
   --color-input: #313131;
   --color-ring: #4c9df3;
@@ -18,7 +18,8 @@
   --radius-md: 6px;
   --radius-lg: 8px;
   --radius-xl: 10px;
-  --color-background: #1f1f1f; /* editor.background */
+  --color-background: #191a1b; /* workspace / viewport / bottom panel */
+  --color-editor: #121314; /* file editor / preview / active file tab */
   --color-surface: #181818; /* sideBar / titleBar / statusBar */
   --color-raised: #252526; /* input / dropdown background */
   --color-border: #ffffff12; /* sideBar / statusBar / panel borders */
@@ -32,7 +33,7 @@
   --color-accent-hover: #66aefa;
   --color-link: #4c9df3;
 
-  --color-selection: #343434; /* editor selection background */
+  --color-selection: #343434; /* selected tabs / items / editor text */
   --color-hover: #2a2a2a99; /* list hover background */
 
   --color-error: #bf616a; /* Nord red */

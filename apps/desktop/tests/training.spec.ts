@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test('pin a loop experiment, train locally and remotely, compare and reload results', async ({ page }) => {
   const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));

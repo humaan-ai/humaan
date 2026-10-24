@@ -9,12 +9,15 @@
   import { studio } from "$lib/studio.svelte";
   import { feedback, dismissAfterReading } from "$lib/feedback";
   import NoticeCard from "./NoticeCard.svelte";
+  import ProblemIcon from './ProblemIcon.svelte';
+  import { problemCounts, showProblems } from '$lib/problems.svelte';
   let now = $state(Date.now());
   let bell = $state<HTMLButtonElement | null>(null);
   let panel = $state<HTMLElement>();
   const current = $derived($feedback.activities.at(-1));
   const unread = $derived($feedback.notices.filter(n => n.unread).length);
   const popups = $derived($feedback.notices.filter(n => n.popup).slice(0, 3));
+  const problems = $derived(problemCounts());
   const buttonClass = buttonVariants({ variant: "ghost", size: "xs", class: "h-5" });
   onMount(() => { const timer = setInterval(() => now = Date.now(), 1000); return () => clearInterval(timer); });
   async function toggleHistory() {
@@ -51,6 +54,11 @@
   <span class="flex min-w-0 max-w-[35%] shrink-0 items-center gap-1.5" title={studio.project?.root}>
     {#if studio.project}<FolderOpen size={12} class="shrink-0" aria-hidden="true" /><span class="truncate">{studio.project.project.name}</span>{:else}<span>No project open</span>{/if}
   </span>
+  {#if studio.project}
+    <Button variant="ghost" size="xs" class="{buttonClass} gap-2" aria-label={`Show Problems: ${problems.error} errors, ${problems.warning} warnings, ${problems.info} informational notes`} title="Show Problems" onclick={showProblems}>
+      {#each ['error', 'warning', 'info'] as const as severity}<span class="flex items-center gap-1 tabular-nums"><ProblemIcon {severity} muted={!problems[severity]} />{problems[severity]}</span>{/each}
+    </Button>
+  {/if}
   <div class="min-w-0 flex-1">
     {#if current}
       <Button variant="ghost" size="xs" class="{buttonClass} flex max-w-full items-center gap-1.5" aria-label="Show operation details" onclick={toggleHistory}><LoaderCircle size={12} class="shrink-0 animate-spin motion-reduce:animate-none" aria-hidden="true" /><span class="truncate">{current.title}</span><span class="shrink-0 text-muted">{Math.max(0, Math.floor((now - current.startedAt) / 1000))}s</span>{#if $feedback.activities.length > 1}<span>+{$feedback.activities.length - 1}</span>{/if}</Button>

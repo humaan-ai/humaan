@@ -6,8 +6,9 @@ import { matrix, roots, type Robot } from './model';
 // All catalog cards share one offscreen context; cards display static snapshots.
 let renderer: THREE.WebGLRenderer | undefined;
 export function thumbnail(robot: Robot): string {
-  renderer ??= new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-  renderer.setSize(400, 240); renderer.setClearColor('#181818');
+  renderer ??= new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+  // Transparent snapshots inherit the same CSS background as the live viewport.
+  renderer.setSize(400, 240); renderer.setClearColor(0x000000, 0);
   const scene = new THREE.Scene(), assembly = new THREE.Group();
   scene.add(assembly, new THREE.HemisphereLight('#ffffff', '#65717f', 2));
   const light = new THREE.DirectionalLight('#ffffff', 3); light.position.set(3, -4, 6); scene.add(light);

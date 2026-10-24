@@ -69,14 +69,14 @@
           basicSetup, oneDark, language.of([]), EditorState.readOnly.of(readOnly),
           EditorView.contentAttributes.of({ 'aria-label': `Editor ${name}`, 'aria-readonly': String(readOnly) }),
           Prec.high(EditorView.theme({
-            '&': { height: '100%', backgroundColor: '#181818', color: '#d4d4d4', fontSize: '13px' },
+            '&': { height: '100%', backgroundColor: 'var(--color-editor)', color: '#d4d4d4', fontSize: '13px' },
             '.cm-scroller': { overflow: 'auto', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', lineHeight: '20px' },
             '.cm-content': { padding: '12px 0', caretColor: '#fff' },
-            '.cm-gutters': { backgroundColor: '#181818', color: '#6e7681', border: 'none' },
+            '.cm-gutters': { backgroundColor: 'var(--color-editor)', color: '#6e7681', border: 'none' },
             '.cm-lineNumbers .cm-gutterElement': { minWidth: '40px', padding: '0 12px 0 8px' },
             '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: '#ffffff06' },
             '&.cm-focused': { outline: 'none' },
-            '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': { backgroundColor: '#264f78' },
+            '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': { backgroundColor: 'var(--color-selection)' },
           }, { dark: true })),
           EditorView.updateListener.of(update => { if (update.docChanged) onchange(update.state.doc.toString()); if (update.docChanged || update.viewportChanged || update.geometryChanged) scheduleMap(); }),
         ],
@@ -100,7 +100,7 @@
   });
 </script>
 
-<div class="flex min-h-0 flex-1 overflow-hidden bg-[#181818]">
+<div class="flex min-h-0 flex-1 overflow-hidden bg-editor">
   <div bind:this={host} class="min-h-0 min-w-0 flex-1 overflow-hidden" data-editor-surface></div>
   <canvas bind:this={minimap} class="h-full w-24 shrink-0 touch-none cursor-pointer focus-visible:outline-1 focus-visible:outline-ring" role="slider" tabindex="0" aria-label="Editor minimap" aria-valuemin={0} aria-valuemax={100} aria-valuenow={scrollPercent} aria-orientation="vertical"
     onpointerdown={(event) => { minimap.setPointerCapture(event.pointerId); point(event); }}

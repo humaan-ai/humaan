@@ -86,7 +86,7 @@
 <svelte:window onkeydown={handleKeydown} />
 
 {#if studio.chatOpen}
-  <aside bind:this={panel} class:immersive={studio.chatExpanded} id="ai-chat-panel" style:--chat-width="{studio.chatWidth}px" class="workbench-panel chat-panel relative flex min-h-0 shrink-0 flex-col text-sm" aria-label="Chat">
+  <aside bind:this={panel} class:immersive={studio.chatExpanded} id="ai-chat-panel" style:--chat-width="{studio.chatWidth}px" class="workbench-panel chat-panel relative flex min-h-0 shrink-0 flex-col bg-surface text-sm" aria-label="Chat">
     {#if !studio.chatExpanded}<div class="chat-resizer"><PanelResizeHandle label="Resize AI chat" width={studio.chatWidth} min={260} max={420} edge="left" onresize={(width) => studio.chatWidth = width} /></div>{/if}
     <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[inherit]">
     <div class="flex min-h-0 flex-1">

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 for (const platform of ['macos', 'windows']) {
   test(`update menu checks from welcome and opens the matching download on ${platform}`, async ({ page }) => {

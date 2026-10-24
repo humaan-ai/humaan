@@ -65,7 +65,7 @@
   <span data-tauri-drag-region class="min-w-0 flex-1 truncate text-center text-xs text-muted">{studio.project?.project.name ?? "Humaan Studio"}</span>
   <div class="absolute top-0 flex h-10 w-20 items-center {customTitlebar ? 'right-36' : 'right-0'}">
   <IconButton id="terminal-toggle" class="absolute right-11 {studio.terminalOpen ? 'text-title' : 'text-muted'}"
-    aria-label={studio.terminalOpen ? "Hide bottom panel" : "Show bottom panel"} aria-expanded={studio.terminalOpen} aria-controls="terminal-panel" title={studio.terminalOpen ? "Hide bottom panel" : "Show bottom panel"}
+    aria-label={studio.terminalOpen ? "Hide bottom panel" : "Show bottom panel"} aria-expanded={studio.terminalOpen} aria-controls="bottom-panel" title={studio.terminalOpen ? "Hide bottom panel" : "Show bottom panel"}
     onclick={() => studio.terminalOpen = !studio.terminalOpen}>
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       {#if studio.terminalOpen}<path d="M3 15h18v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" fill="currentColor" stroke="none" />{/if}

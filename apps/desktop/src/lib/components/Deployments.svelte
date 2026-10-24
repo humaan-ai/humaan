@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
   import { toast } from 'svelte-sonner';
   import Policies from './Policies.svelte';
@@ -12,9 +12,11 @@
   import Settings2 from '@lucide/svelte/icons/settings-2';
   import Play from '@lucide/svelte/icons/play';
   import Pause from '@lucide/svelte/icons/pause';
+  import Trash2 from '@lucide/svelte/icons/trash-2';
+  import Square from '@lucide/svelte/icons/square';
   import { studio } from '$lib/studio.svelte';
   import { emptyRobot, type SavedVersion, type Robot } from '$lib/builder/model';
-  import { mapTelemetry, type Profile, type Session, type Frame, type Mapping } from '$lib/deployments/model';
+  import { mapTelemetry, replayPose, type Profile, type Session, type Frame, type Mapping } from '$lib/deployments/model';
   import StudioSidebar from './StudioSidebar.svelte';
   import WorkspaceColumn from './WorkspaceColumn.svelte';
   import BuilderViewport from './BuilderViewport.svelte';
@@ -29,15 +31,34 @@
   let error = $state(''), busy = $state(false), query = $state(''), selected = $state('');
   let connected = $state(false), connecting = $state(false), recording = $state(false), pending = $state<Frame[]>([]);
   let positions = $state<Record<string, number>>({}), lastReceived = $state(0), now = $state(Date.now());
-  let recordingStart = 0, recordingDate = 0, lastSequence = -1, generation = 0, disposed = false, polling = false;
-  let index = $state(0), playing = $state(false), inspector = $state(true);
+  let recordingStart = 0, recordingDate = $state(0), lastSequence = -1, generation = 0, disposed = false, polling = false;
+  let deleteOpen = $state(false), deleteError = $state('');
+  let playhead = $state(0), playing = $state(false), inspector = $state(true);
   let createOpen = $state(false), name = $state(''), versionId = $state(''), port = $state(9876), draftRobot = $state<Robot>(emptyRobot()), mappings = $state<Mapping[]>([]);
   const section = $derived(studio.deploymentSection);
   const displayed = $derived(session?.profile.robot || profile?.robot);
-  const shownPositions = $derived(session ? session.frames[index]?.positions || {} : positions);
+  const shownPositions = $derived(session ? replayPose(session.frames, playhead) : positions);
+  const duration = $derived(session?.frames.at(-1)?.time || 0);
   const entries = $derived((section === 'robots' ? robots : sessions).filter(item => item.name.toLowerCase().includes(query.toLowerCase())));
   const locked = $derived(connected || connecting || recording || pending.length > 0 || busy || studio.policyBusy);
   const status = $derived(connecting ? 'Connecting' : connected ? now - lastReceived > 1500 ? 'Waiting for telemetry' : 'Live · Read only' : 'Disconnected');
+  const canRecord = $derived(!busy && connected && now - lastReceived <= 1500 && !pending.length && !recording);
+  const elapsed = $derived(recording ? Math.max(0, (now - recordingDate) / 1000) : pending.at(-1)?.time || 0);
+  function timecode(seconds: number) {
+    const whole = Math.max(0, Math.floor(seconds));
+    return `${Math.floor(whole / 60).toString().padStart(2, '0')}:${(whole % 60).toString().padStart(2, '0')}`;
+  }
+  async function deleteSession() {
+    if (!session || locked) return;
+    const id = session.id;
+    busy = true; deleteError = ''; playing = false;
+    try {
+      await invoke('deployment_delete_session', { root, id });
+      sessions = sessions.filter(item => item.id !== id);
+      session = null; profile = null; playhead = 0; selected = ''; deleteOpen = false;
+      toast.success('Session deleted.');
+    } catch (cause) { deleteError = String(cause); } finally { busy = false; }
+  }
   async function work(action: () => Promise<void>) {
     if (busy) return; busy = true; error = '';
     try { await action(); } catch (cause) { error = String(cause); } finally { busy = false; }
@@ -70,7 +91,7 @@
     playing = false;
     await work(async () => {
       if (section === 'robots') { profile = await invoke<Profile>('deployment_load', { root, kind: 'robots', id: item.id }); session = null; positions = {}; }
-      else { session = await invoke<Session>('deployment_load', { root, kind: 'sessions', id: item.id }); index = 0; }
+      else { session = await invoke<Session>('deployment_load', { root, kind: 'sessions', id: item.id }); playhead = 0; }
       selected = '';
     });
   }
@@ -112,8 +133,8 @@
     session = null; error = ''; lastSequence = -1; lastReceived = Date.now(); connecting = true; const token = ++generation; void poll(token);
   }
   function startRecording() {
-    if (!connected || now - lastReceived > 1500 || pending.length) return;
-    pending = []; recordingStart = performance.now(); recordingDate = Date.now(); recording = true;
+    if (!canRecord) return;
+    pending = []; recordingStart = performance.now(); recordingDate = Date.now(); now = recordingDate; recording = true;
   }
   function navigate(value: 'robots' | 'policies' | 'sessions') {
     if (locked) return;
@@ -129,10 +150,15 @@
   });
   $effect(() => {
     if (!playing || !session) return;
-    if (index >= session.frames.length - 1) { playing = false; return; }
-    const delay = Math.max(1, (session.frames[index + 1].time - session.frames[index].time) * 1000);
-    const timer = setTimeout(() => index++, delay);
-    return () => clearTimeout(timer);
+    const end = duration, start = untrack(() => playhead), clock = performance.now();
+    let request: number;
+    function tick(now: number) {
+      playhead = Math.min(end, start + (now - clock) / 1000);
+      if (playhead >= end) playing = false;
+      else request = requestAnimationFrame(tick);
+    }
+    request = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(request);
   });
 </script>
 
@@ -154,15 +180,18 @@
     <section aria-label="Deployments workspace" class="workbench-panel flex min-h-0 flex-1 flex-col overflow-hidden">
       <header class="flex h-[35px] shrink-0 items-center justify-between border-b border-border px-3 text-xs"><span class="flex min-w-0 items-center gap-2"><RobotArm size={14} /><span class="truncate">{session?.name || profile?.name || (section === 'sessions' ? 'Sessions' : 'Robots')}</span></span><Button size="icon-sm" variant="ghost" aria-label="Toggle robot details" aria-pressed={inspector} onclick={() => inspector = !inspector}><Settings2 size={14} /></Button></header>
       <div class="flex h-[57px] shrink-0 items-center gap-2 border-b border-border px-4">
-        {#if session}<span class="text-xs text-muted">Recorded session · {session.frames.length} samples</span><Button class="ml-auto" onclick={() => { studio.activeView = 'experiences'; }}>Experiences</Button>
-        {:else if profile}<Button disabled={busy || (!connected && !connecting && locked)} onclick={() => connected || connecting ? disconnect() : connect()}><Radio size={15} />{connected || connecting ? 'Disconnect' : 'Live Link'}</Button><span class="rounded border border-border px-2 py-1 text-xs {connected ? 'text-success' : 'text-muted'}" role="status">{status}</span><Button class="ml-auto" disabled={busy || (!recording && (!connected || now - lastReceived > 1500 || pending.length > 0))} onclick={() => recording ? saveRecording() : startRecording()}>{recording ? `Stop & save · ${pending.length}` : 'Record session'}</Button>
+        {#if session}<span class="text-xs text-muted">Recorded session · {session.frames.length} samples</span><Button class="ml-auto" onclick={() => { studio.activeView = 'experiences'; }}>Experiences</Button><Button variant="ghost" disabled={locked} onclick={() => { playing = false; deleteError = ''; deleteOpen = true; }}><Trash2 size={15} />Delete session</Button>
+        {:else if profile}<Button disabled={busy || (!connected && !connecting && locked)} onclick={() => connected || connecting ? disconnect() : connect()}><Radio size={15} />{connected || connecting ? 'Disconnect' : 'Live Link'}</Button><span class="rounded border border-border px-2 py-1 text-xs {connected ? 'text-success' : 'text-muted'}" role="status">{status}</span>
         {:else}<span class="text-xs text-muted">Physical robots and recorded sessions</span>{/if}
       </div>
       {#if error}<div role="alert" class="border-b border-border px-4 py-3 text-xs text-error">{error}</div>{/if}
       {#if !recording && pending.length}<div class="flex items-center gap-3 border-b border-border p-3 text-xs text-warning">{pending.length} samples waiting to save.<Button disabled={busy} onclick={() => saveRecording('Recovered unsaved session')}>Retry save</Button></div>{/if}
       {#if displayed && (section === 'robots' || session)}
         <div class="flex min-h-0 flex-1">
-          <div class="relative flex min-h-0 min-w-0 flex-1 flex-col"><BuilderViewport robot={displayed} {selected} onselect={id => selected = id} positions={shownPositions} /></div>
+          <div class="relative flex min-h-0 min-w-0 flex-1 flex-col">
+            <BuilderViewport robot={displayed} {selected} onselect={id => selected = id} positions={shownPositions} />
+            {#if recording}<div class="pointer-events-none absolute right-4 top-4 flex items-center gap-2 rounded-md bg-black/75 px-3 py-2 text-xs text-white"><span class="size-2 rounded-full bg-red-500 motion-safe:animate-pulse"></span><span class="font-medium tracking-widest">REC</span><span class="font-mono tabular-nums">{timecode(elapsed)}</span></div>{/if}
+          </div>
           {#if inspector}<aside aria-label="Robot details" class="w-72 shrink-0 overflow-auto border-l border-border p-4 text-xs">
             <h3 class="font-medium text-title">{session ? 'Session details' : 'Connection'}</h3>
             <dl class="mt-4 space-y-3"><div><dt class="text-muted">Source version</dt><dd class="mt-1 break-all">{session?.profile.versionId || profile?.versionId}</dd></div><div><dt class="text-muted">Interface</dt><dd class="mt-1">Local telemetry bridge · 127.0.0.1:{session?.profile.port || profile?.port}</dd></div>{#if session}<div><dt class="text-muted">Recorded</dt><dd class="mt-1">{new Date(session.createdAt).toLocaleString()}</dd></div><div><dt class="text-muted">End reason</dt><dd class="mt-1">{session.reason}</dd></div>{/if}</dl>
@@ -172,7 +201,23 @@
             <p class="mt-5 leading-relaxed text-muted">Measured motion is mirrored in 3D. This view does not run physics or send motor commands.</p>
           </aside>{/if}
         </div>
-        {#if session}<div class="flex items-center gap-3 border-t border-border px-4 py-3"><Button size="icon-sm" aria-label={playing ? 'Pause session' : 'Play session'} onclick={() => { if (index >= session!.frames.length - 1) index = 0; playing = !playing; }}>{#if playing}<Pause size={15} />{:else}<Play size={15} />{/if}</Button><input class="min-w-0 flex-1 accent-white" type="range" aria-label="Session timeline" min={0} max={session.frames.length - 1} bind:value={index} oninput={() => playing = false} /><span class="text-xs text-muted">{session.frames[index]?.time.toFixed(1)} / {session.frames.at(-1)?.time.toFixed(1)} s</span></div>{/if}
+        {#if session}
+          <div class="flex shrink-0 items-center gap-3 border-t border-border bg-raised px-4 py-3">
+            <Button size="icon-lg" aria-label={playing ? 'Pause session' : 'Play session'} disabled={busy || deleteOpen} onclick={() => { if (playhead >= duration) playhead = 0; playing = !playing; }}>{#if playing}<Pause size={18} />{:else}<Play size={18} />{/if}</Button>
+            <span class="font-mono text-xs tabular-nums">{timecode(playhead)}</span>
+            <input class="min-w-0 flex-1 accent-white" type="range" aria-label="Session timeline" aria-valuetext={`${timecode(playhead)} of ${timecode(duration)}`} min={0} max={duration} step="any" bind:value={playhead} oninput={() => playing = false} />
+            <span class="font-mono text-xs tabular-nums text-muted">{timecode(duration)}</span>
+          </div>
+        {:else if profile}
+          <div aria-label="Session recorder" class="flex shrink-0 items-center gap-4 border-t border-border bg-raised px-4 py-3">
+            <Button size="icon-lg" class="rounded-full border-error/40" aria-label={recording ? 'Stop and save recording' : 'Record session'} title={recording ? 'Stop and save recording' : 'Record session'} disabled={busy || (!recording && !canRecord)} onclick={() => recording ? saveRecording() : startRecording()}>
+              {#if recording}<Square size={16} class="fill-error text-error" />{:else}<span class="size-4 rounded-full bg-error"></span>{/if}
+            </Button>
+            <div class="min-w-0"><p class="text-xs font-medium">{recording ? 'Recording motion' : busy && pending.length ? 'Saving recording…' : pending.length ? 'Recording not saved' : 'Record motion session'}</p><p class="mt-1 text-xs text-muted">{recording ? 'Press stop to save' : pending.length ? 'Retry saving above to keep this recording' : connected ? 'Ready to record · 3D motion replay' : 'Connect Live Link to record'}</p></div>
+            <span aria-label="Recording duration" class="ml-auto font-mono text-lg tabular-nums">{timecode(elapsed)}</span>
+            <span class="text-xs text-muted">{pending.length.toLocaleString()} / 10,000 samples</span>
+          </div>
+        {/if}
       {:else}<div class="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center"><RobotArm size={36} class="text-muted" /><h2 class="text-lg">{section === 'robots' ? 'Connect your physical robot' : 'Replay physical robot sessions'}</h2><p class="max-w-md text-sm leading-relaxed text-muted">{section === 'robots' ? 'Pin a Builder version, map telemetry channels to joints, and mirror your robot in the workspace.' : 'Select a recorded session to inspect its measured motion and exact robot configuration.'}</p>{#if section === 'robots'}<Button onclick={newRobot} disabled={busy}><Plus size={15} />Add robot</Button>{/if}</div>{/if}
     </section>
   </WorkspaceColumn>
@@ -190,5 +235,13 @@
       {#if error}<p role="alert" class="text-xs text-error">{error}</p>{/if}
       <div class="flex justify-end gap-2"><Button type="button" disabled={busy} onclick={() => createOpen = false}>Cancel</Button><Button type="submit" disabled={busy || !versionId || !mappings.length}>Save robot</Button></div>
     </form>
+  </Dialog.Content>
+</Dialog.Root>
+<Dialog.Root bind:open={deleteOpen}>
+  <Dialog.Content onInteractOutside={event => { if (busy) event.preventDefault(); }} onEscapeKeydown={event => { if (busy) event.preventDefault(); }}>
+    <Dialog.Title>Delete recorded session?</Dialog.Title>
+    <Dialog.Description>Delete “{session?.name}” and its recorded motion? This cannot be undone. The robot profile and saved Builder version are kept.</Dialog.Description>
+    {#if deleteError}<p role="alert" class="mt-3 text-xs text-error">{deleteError}</p>{/if}
+    <div class="mt-4 flex justify-end gap-2"><Button disabled={busy} onclick={() => deleteOpen = false}>Cancel</Button><Button variant="destructive" disabled={busy} onclick={deleteSession}>{busy ? 'Deleting…' : 'Delete session'}</Button></div>
   </Dialog.Content>
 </Dialog.Root>

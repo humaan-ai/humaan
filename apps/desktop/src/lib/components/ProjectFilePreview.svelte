@@ -8,7 +8,7 @@
   }) : '');
 </script>
 
-<div class="min-h-0 flex-1 overflow-auto bg-[#181818] p-6 text-[#d4d4d4]" role="region" aria-label={`Preview ${name}`}>
+<div class="min-h-0 flex-1 overflow-auto bg-editor p-6 text-[#d4d4d4]" role="region" aria-label={`Preview ${name}`}>
   {#if markdown}<article class="preview mx-auto max-w-3xl">{@html html}</article>
   {:else}<pre class="whitespace-pre-wrap break-words font-mono text-sm leading-6">{content}</pre>{/if}
 </div>
@@ -22,8 +22,8 @@
   .preview :global(p), .preview :global(ul), .preview :global(ol), .preview :global(pre) { margin: 1em 0; }
   .preview :global(ul) { list-style: disc; padding-left: 24px; }
   .preview :global(ol) { list-style: decimal; padding-left: 24px; }
-  .preview :global(pre) { padding: 16px; background: #222; overflow: auto; border-radius: 6px; }
-  .preview :global(code) { font-family: ui-monospace, monospace; background: #222; padding: 2px 4px; }
+  .preview :global(pre) { padding: 16px; background: var(--color-raised); overflow: auto; border-radius: 6px; }
+  .preview :global(code) { font-family: ui-monospace, monospace; background: var(--color-raised); padding: 2px 4px; }
   .preview :global(blockquote) { border-left: 3px solid #555; padding-left: 16px; color: #aaa; }
   .preview :global(table) { border-collapse: collapse; }
   .preview :global(td), .preview :global(th) { padding: 6px 12px; border: 1px solid #444; }

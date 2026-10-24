@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test('review cost, launch, reconnect, retrieve results and confirm compute cleanup', async ({ page }) => {
   const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));

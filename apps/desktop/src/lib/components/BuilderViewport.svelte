@@ -19,6 +19,9 @@
   let grid: THREE.GridHelper;
   $effect(() => { if (ready) grid.position.z = floorHeight; });
   let parts = new Map<string, THREE.Group>();
+  let linkFrames = new Map<string, THREE.Group>();
+  let jointMotions = new Map<string, THREE.Group>();
+  let assemblyRevision = $state(0);
   let origins = new Map<string, THREE.Vector3>();
   let offsets = new Map<string, THREE.Vector3>();
   let robotKey = '';
@@ -108,70 +111,98 @@
   }
   $effect(() => {
     // Serialize to track nested configuration changes from the property inspector.
-    const key = JSON.stringify(robot); JSON.stringify(positions); selected; collision; explode;
+    const key = JSON.stringify(robot); selected; collision; explode;
     if (!ready) return;
-    if (key !== robotKey || !explode) { offsets.clear(); robotKey = key; }
-    transform.detach(); parts = new Map(); origins = new Map();
-    error = ''; dispose(assembly); scene.remove(assembly); assembly = new THREE.Group(); scene.add(assembly);
-    const seen = new Set<string>();
-    function add(id: string, parent: THREE.Object3D) {
-      if (seen.has(id)) return; seen.add(id);
-      const link = robot.links.find(l => l.id === id); if (!link) return;
-      const frameGroup = new THREE.Group(); parent.add(frameGroup);
-      const group = new THREE.Group(); frameGroup.add(group); parts.set(id, group);
-      for (const shape of collision ? link.collisions : link.visuals) {
-        try { const object = geometry(shape); object.traverse(o => { o.userData.linkId = id; if (o instanceof THREE.Mesh && id === selected) (o.material as THREE.MeshStandardMaterial).emissive.set('#163957'); }); group.add(object); }
-        catch (cause) { error = String(cause); }
-      }
-      if (id === selected) {
-        const axes = new THREE.AxesHelper(0.15);
-        // Selection axes are an overlay: coplanar grid/mesh surfaces must not
-        // compete with them in the depth buffer as the camera moves.
-        const materials = Array.isArray(axes.material) ? axes.material : [axes.material];
-        for (const material of materials) {
-          material.depthTest = false;
-          material.depthWrite = false;
-          material.toneMapped = false;
-        }
-        axes.renderOrder = 1;
-        group.add(axes);
-      }
-      for (const j of robot.joints.filter(j => j.parent === id)) {
-        const frame = new THREE.Group(); frame.applyMatrix4(matrix(j.origin)); frameGroup.add(frame);
-        const motion = new THREE.Group(), axis = new THREE.Vector3(...j.axis).normalize(), value = jointPosition(robot, j.id, positions);
-        if (j.type === 'prismatic') motion.position.copy(axis.multiplyScalar(value));
-        if (j.type === 'revolute' || j.type === 'continuous') motion.quaternion.setFromAxisAngle(axis, value);
-        frame.add(motion); add(j.child, motion);
-      }
-    }
-    for (const link of roots(robot)) add(link.id, assembly);
-    assembly.updateMatrixWorld(true);
-    for (const [id, part] of parts) { assembly.attach(part); origins.set(id, part.position.clone()); }
-    extent = Math.max(new THREE.Box3().setFromObject(assembly).getSize(new THREE.Vector3()).length(), .1);
+    // Pose updates must never reparse meshes or recreate GPU resources.
     untrack(() => {
-      assembly.position.fromArray(poses ? [0, 0, 0] : robot.placement || [0, 0, 0]); guides.position.copy(assembly.position);
-      updatePresentation();
-      if (poses) for (const [id, pose] of Object.entries(poses)) {
-        const part = parts.get(id); if (part) { part.position.set(...pose.position); part.quaternion.set(...pose.quaternion); }
+      if (key !== robotKey || !explode) { offsets.clear(); robotKey = key; }
+      transform.detach(); parts = new Map(); origins = new Map(); linkFrames = new Map(); jointMotions = new Map();
+      error = ''; dispose(assembly); scene.remove(assembly); assembly = new THREE.Group(); scene.add(assembly);
+      const seen = new Set<string>();
+      function add(id: string, parent: THREE.Object3D) {
+        if (seen.has(id)) return; seen.add(id);
+        const link = robot.links.find(l => l.id === id); if (!link) return;
+        const frameGroup = new THREE.Group(); parent.add(frameGroup); linkFrames.set(id, frameGroup);
+        const group = new THREE.Group(); frameGroup.add(group); parts.set(id, group);
+        for (const shape of collision ? link.collisions : link.visuals) {
+          try { const object = geometry(shape); object.traverse(o => { o.userData.linkId = id; if (o instanceof THREE.Mesh && id === selected) (o.material as THREE.MeshStandardMaterial).emissive.set('#163957'); }); group.add(object); }
+          catch (cause) { error = String(cause); }
+        }
+        if (id === selected) {
+          const axes = new THREE.AxesHelper(0.15);
+          // Selection axes are an overlay: coplanar grid/mesh surfaces must not
+          // compete with them in the depth buffer as the camera moves.
+          const materials = Array.isArray(axes.material) ? axes.material : [axes.material];
+          for (const material of materials) {
+            material.depthTest = false;
+            material.depthWrite = false;
+            material.toneMapped = false;
+          }
+          axes.renderOrder = 1;
+          group.add(axes);
+        }
+        for (const j of robot.joints.filter(j => j.parent === id)) {
+          const frame = new THREE.Group(); frame.applyMatrix4(matrix(j.origin)); frameGroup.add(frame);
+          const motion = new THREE.Group(), axis = new THREE.Vector3(...j.axis).normalize(), value = jointPosition(robot, j.id, positions);
+          jointMotions.set(j.id, motion);
+          if (j.type === 'prismatic') motion.position.copy(axis.multiplyScalar(value));
+          if (j.type === 'revolute' || j.type === 'continuous') motion.quaternion.setFromAxisAngle(axis, value);
+          frame.add(motion); add(j.child, motion);
+        }
       }
+      for (const link of roots(robot)) add(link.id, assembly);
+      assembly.updateMatrixWorld(true);
+      for (const [id, part] of parts) { assembly.attach(part); origins.set(id, part.position.clone()); }
+      extent = Math.max(new THREE.Box3().setFromObject(assembly).getSize(new THREE.Vector3()).length(), .1);
+      untrack(() => {
+        assembly.position.fromArray(poses ? [0, 0, 0] : robot.placement || [0, 0, 0]); guides.position.copy(assembly.position);
+        updatePresentation();
+        if (poses) for (const [id, pose] of Object.entries(poses)) {
+          const part = parts.get(id); if (part) { part.position.set(...pose.position); part.quaternion.set(...pose.quaternion); }
+        }
+      });
+      if (explode && parts.has(selected)) transform.attach(parts.get(selected)!);
+      const rootKey = roots(robot).map(l => l.id).join('/');
+      if (!robot.links.length) fitted = false;
+      if (robot.links.length && (!fitted || rootKey !== fittedRoot)) { fit(); fitted = true; fittedRoot = rootKey; }
+      assemblyRevision++;
     });
-    if (explode && parts.has(selected)) transform.attach(parts.get(selected)!);
-    const rootKey = roots(robot).map(l => l.id).join('/');
-    if (!robot.links.length) fitted = false;
-    if (robot.links.length && (!fitted || rootKey !== fittedRoot)) { fit(); fitted = true; fittedRoot = rootKey; }
   });
   $effect(() => {
     const current = poses;
-    if (!ready || !current) return;
-    assembly.position.set(0, 0, 0);
-    for (const [id, pose] of Object.entries(current)) {
-      const part = parts.get(id); if (part) { part.position.set(...pose.position); part.quaternion.set(...pose.quaternion); }
-    }
+    const measured = positions;
+    JSON.stringify(measured); JSON.stringify(current); assemblyRevision;
+    if (!ready) return;
+    untrack(() => {
+      if (current) {
+        assembly.position.set(0, 0, 0);
+        for (const [id, pose] of Object.entries(current)) {
+          const part = parts.get(id); if (part) { part.position.set(...pose.position); part.quaternion.set(...pose.quaternion); }
+        }
+        return;
+      }
+      assembly.position.fromArray(robot.placement || [0, 0, 0]);
+      for (const j of robot.joints) {
+        const motion = jointMotions.get(j.id); if (!motion) continue;
+        const value = jointPosition(robot, j.id, measured), axis = new THREE.Vector3(...j.axis).normalize();
+        if (j.type === 'prismatic') motion.position.copy(axis.multiplyScalar(value));
+        if (j.type === 'revolute' || j.type === 'continuous') motion.quaternion.setFromAxisAngle(axis, value);
+      }
+      assembly.updateMatrixWorld(true);
+      const inverse = assembly.matrixWorld.clone().invert(), local = new THREE.Matrix4();
+      for (const [id, part] of parts) {
+        local.multiplyMatrices(inverse, linkFrames.get(id)!.matrixWorld);
+        local.decompose(part.position, part.quaternion, part.scale);
+        origins.set(id, part.position.clone());
+      }
+      updatePresentation();
+    });
   });
   onMount(() => {
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: true }); renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-      renderer.setClearColor('#181818'); host.prepend(renderer.domElement);
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+      // Let the CSS workspace background show through the canvas.
+      renderer.setClearColor(0x000000, 0); host.prepend(renderer.domElement);
       renderer.domElement.setAttribute('aria-label', 'Robot 3D viewport');
       scene = new THREE.Scene(); camera = new THREE.PerspectiveCamera(45, 1, 0.001, 1000); camera.up.set(0, 0, 1); camera.position.set(2, -3, 2);
       controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true;
@@ -223,7 +254,7 @@
   });
 </script>
 
-<div bind:this={host} class="relative min-h-0 flex-1 overflow-hidden">
+<div bind:this={host} class="relative min-h-0 flex-1 overflow-hidden bg-background">
   <div class="absolute left-3 top-3 z-10 flex max-w-[calc(100%-24px)] flex-wrap items-center gap-2">
     <Button size="icon-sm" onclick={fit} disabled={!ready} aria-label="Zoom to fit" title="Zoom to fit"><Maximize size={15} /></Button>
     {#if allowGroundPlacement}

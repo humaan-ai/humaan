@@ -27,4 +27,8 @@ for (const path of ['LICENSE', 'crates/engine/Cargo.toml', 'docs/README.mdx', 'r
 }
 const tag = process.env.RELEASE_TAG;
 if (tag && tag !== `studio-v${version}`) throw new Error(`Release tag must be studio-v${version}`);
-console.log(`Studio ${version}: versions, identity, repository layout${tag ? ', and release tag' : ''} verified`);
+const notesPath = `.github/releases/studio-v${version}.txt`;
+if (!existsSync(resolve(root, notesPath)) || !read(notesPath).trim()) {
+  throw new Error(`Missing or empty release notes: ${notesPath}`);
+}
+console.log(`Studio ${version}: versions, identity, repository layout, release notes${tag ? ', and release tag' : ''} verified`);

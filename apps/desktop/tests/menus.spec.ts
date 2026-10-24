@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test('menus open settings, gate workspace navigation, toggle panels, and preserve editor drafts', async ({ page }) => {
   await page.addInitScript(() => {
@@ -19,6 +19,8 @@ test('menus open settings, gate workspace navigation, toggle panels, and preserv
         if (command === 'experience_project') return { root: '/test/project', project: {id: 'test', name: 'Menu project'} };
         if (command === 'experience_list') return {records: [], warning: null};
         if (command === 'experience_reviews') return {};
+        if (command === 'builder_project') return { activeRobotId: null, robots: [] };
+        if (command === 'builder_draft_load') return null;
         if (command === 'project_entries') return {truncated: false, entries: [{name: 'robot.txt', path: 'robot.txt', directory: false, size: 8, kind: 'Text'}]};
         if (command === 'project_read_file') return {content: 'original', readOnly: false};
         return [];

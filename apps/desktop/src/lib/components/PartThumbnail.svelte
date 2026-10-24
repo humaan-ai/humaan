@@ -20,6 +20,6 @@
     return () => { disposed = true; observer.disconnect(); };
   });
 </script>
-<div bind:this={host} class="flex w-full items-center justify-center bg-[#181818] text-xs text-muted {compact ? 'h-16' : 'h-36'}">
+<div bind:this={host} class="flex w-full items-center justify-center bg-background text-xs text-muted {compact ? 'h-16' : 'h-36'}">
   {#if image}<img src={image} alt={`3D preview of ${name}`} class="h-full w-full object-contain" />{:else}<span class="px-2 text-center text-[10px]">{failed ? 'Preview unavailable' : empty ? 'No visual geometry' : 'Loading preview…'}</span>{/if}
 </div>

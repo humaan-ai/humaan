@@ -1,4 +1,9 @@
 import { emptyRobot, pose, validate, type Robot, type Pose, type Vec3, type Shape, type Joint } from './model';
+const extensionImportNote = 'Some simulator or hardware settings are preserved in your URDF but aren’t used by Humaan yet. You can continue editing the robot.';
+export function formatImportNote(note: string) {
+  // Drafts may contain the previous extension notice; update its wording without reimporting.
+  return note.startsWith('Gazebo, transmission, and ros2_control extensions are retained') ? extensionImportNote : note;
+}
 const child = (e: Element, tag: string) => Array.from(e.children).find(c => c.tagName === tag);
 const children = (e: Element, tag: string) => Array.from(e.children).filter(c => c.tagName === tag);
 function number(value: string | null | undefined, fallback = 0) { const n = value == null ? fallback : Number(value); if (!Number.isFinite(n)) throw new Error(`Invalid number: ${value}`); return n; }
@@ -74,7 +79,7 @@ export async function importUrdf(files: UrdfFile[], filename?: string): Promise<
     if (mimic) robot.joints.at(-1)!.mimic = { joint: mimic.getAttribute('joint') || '', multiplier: number(mimic.getAttribute('multiplier'), 1), offset: number(mimic.getAttribute('offset')) };
   }
   if (robot.joints.some(j => j.mimic)) warnings.push('Mimic joints are preserved for Builder preview. Simulation and training with mimic joints are not supported yet.');
-  if (children(element, 'gazebo').length || children(element, 'transmission').length || children(element, 'ros2_control').length) warnings.push('Gazebo, transmission, and ros2_control extensions are retained in the original URDF but are not mapped automatically. Configure sensors and hardware mappings in Builder.');
+  if (children(element, 'gazebo').length || children(element, 'transmission').length || children(element, 'ros2_control').length) warnings.push(extensionImportNote);
   const issues = validate(robot); if (issues.length) throw new Error(issues.join('\n'));
   return { robot, warnings };
 }

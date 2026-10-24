@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test('overview previews project URDFs before any Builder version is saved', async ({ page }) => {
   await page.addInitScript(() => {
