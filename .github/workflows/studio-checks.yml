@@ -11,6 +11,7 @@ on:
       - 'scripts/**'
       - 'apps/cli/Cargo.toml'
       - '.github/workflows/studio-*.yml'
+      - '.github/releases/**'
   push:
     branches: [main]
     paths:
@@ -22,6 +23,7 @@ on:
       - 'scripts/**'
       - 'apps/cli/Cargo.toml'
       - '.github/workflows/studio-*.yml'
+      - '.github/releases/**'
   workflow_dispatch:
 
 permissions:
@@ -46,4 +48,4 @@ jobs:
       - run: bun run test:unit
       - run: bun run build
       - run: bunx playwright install --with-deps chromium
-      - run: bun run test:e2e tests/updates.spec.ts tests/menus.spec.ts
+      - run: bun run test:e2e
