@@ -8,25 +8,7 @@ Builder assembles and configures robots for versioned experiments. Work through 
 
 ## Assemble and configure
 
-**Assemble** gives the viewport the full workspace width for selecting, adding, and positioning components. **Configure** opens the selected link's property editor on the right. Switching between modes preserves your selection and edits.
-
-The **Workflow** tabs select one working mode. **Geometry** (Visual or Collision) and **View** (Normal or Exploded) sit after the workflow tabs and before **Save** in the same toolbar, separated by a divider. Their two-option segmented controls keep both choices visible; click a choice or focus the group and use the arrow keys. On narrower windows, the view controls and Save wrap together onto the next line. Changing a view setting keeps your current workflow. Exploded view lets you drag components apart for inspection; selecting **Normal** restores the assembled view without changing the saved robot. **Test** returns to Normal view and disables exploded inspection while previewing joints.
-
-Open your project folder and keep robot sources under `robots/`. Builder discovers URDF files recursively and lists their project-relative paths in **Project robot**, so variants with the same robot name remain distinguishable. Use **Refresh robots** after adding or moving files.
-
-Click the current robot to open the robot picker. Switch between a preview grid and a compact list, search by filename or path, then select a card and choose **Open robot**. Previews show the latest draft when available, with link and joint counts. The import dialog uses the same picker to choose among multiple URDF files. Robots without visual geometry or with unavailable previews can still be selected.
-
-Select a robot to load its URDF and referenced STL or OBJ meshes. Builder preserves each robot's draft when switching and restores the last selected robot when you reopen the project. Drafts are saved automatically under `.humaan/builder/robots/`; **Save version** creates an immutable snapshot for the selected robot. Older versions remain available under **Existing project assembly**.
-
-Use **Add robot → Create blank robot** to create `robots/<name>/robot.urdf` with a base link. **Import URDF files…** copies selected URDFs and their meshes into `robots/<name>/`; select the meshes alongside the URDF, or use **Import folder…** to include their containing directory. Folder imports preserve their structure and list every included URDF separately. Choose which robot to open before importing.
-
-Both workflows let you choose the destination folder name. If it already exists, choose another name or cancel; Builder never overwrites or merges an existing folder. Imports adjust URDF mesh references to resolve inside the copied files. Editing or saving a version does not overwrite source URDF files. Source paths are relative to the project folder, and a saved draft remains available if its source file goes missing.
-
 Import a URDF with its meshes, inspect links and joints, and work with reusable modules. Configure physical properties, joint limits, sensors, and hardware mappings explicitly; a visual model alone is not a complete simulation definition.
-
-The bottom panel has **Problems** and **Terminal** tabs. **Problems** lists the current robot's validation findings and import notes with red error, amber warning, and blue information icons before each message. Click the counts in the status bar to open Problems, or use the bottom-panel toggle. Click a validation finding to open the affected component in Configure. Findings update as you edit or switch robots; import notes describe the original import. Close the panel to reclaim the 3D viewport space.
-
-Gazebo, transmission, and ros2_control settings are preserved in the source URDF but are not used automatically by Humaan. You can continue editing; adding sensor or hardware metadata does not activate those integrations. Simulation readiness issues also remain available in **Test**.
 
 ## Test and save
 

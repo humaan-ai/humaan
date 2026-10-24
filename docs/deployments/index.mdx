@@ -16,51 +16,12 @@ Select a robot profile to check configuration compatibility and save an assignme
 
 Create a robot profile pinned to a Builder version and map calibrated telemetry channels to its joints. Live Link displays measured positions through a local telemetry bridge. A hardware-specific reader is required; the bridge does not send motor commands.
 
-### SO-101 telemetry
-
-For an already configured and calibrated SO-101 follower, activate the LeRobot
-environment used for calibration. From the repository root, run:
-
-```bash
-python apps/desktop/tools/so101_telemetry.py \
-  --port /dev/tty.usbmodem5B7B0148301 \
-  --id follower_arm \
-  | python apps/desktop/tools/telemetry_bridge.py --port 9876
-```
-
-Replace the USB path and ID with your arm's values. The reader requires existing
-calibration matching the motors; `--calibration-dir` can select its directory.
-It reads the motor bus directly without configuring motors, changing torque, or
-sending movement commands. Close other programs using the serial port first.
-
-In **Deployments → Robots → Add robot**, choose a saved Builder version and
-bridge port **9876**. Map channels `shoulder_pan`, `shoulder_lift`, `elbow_flex`,
-`wrist_flex`, `wrist_roll`, and `gripper` to the corresponding joints, selecting
-**deg**. All channels contain servo angles, including the gripper (not LeRobot's
-usual gripper percentage). Set direction and zero offsets to match the URDF;
-offsets are entered in radians. This assumes a direct rotary joint mapping;
-linkages needing a nonlinear conversion require an additional adapter.
-Save the robot and select **Live Link**. Stop the pipeline with Ctrl+C.
-
 ## Sessions
 
-Use the red record button below the live viewport to capture a motion session.
-The viewport shows a **REC** indicator, and the recorder displays elapsed time
-and the sample count. Press the square stop button to save before closing the
-application. If saving fails, use **Retry save** to preserve the captured samples.
-
-Sessions retain converted joint positions, local receipt timestamps, and the
-robot definition and mapping for playback. Select a session to play, pause, or
-scrub its timeline. Playback follows elapsed time and interpolates joint positions
-between recorded samples for smoother motion; stored measurements are unchanged.
-Interpolation does not recover motion that was not sampled. **Delete session** asks for confirmation before permanently
-removing that session; the robot profile and saved Builder version are kept.
-
-Capture is limited to 10,000 samples. The recorder controls capture 3D motion
-for replay, not a video file or synchronized camera footage.
+Record a session to capture converted joint positions and local receipt timestamps, then stop and save before closing the application. Sessions retain the robot definition and mapping for playback. Capture is limited to 10,000 samples and does not include synchronized camera data.
 
 ## Boundaries
 
-Physical policy execution, in-app SO-101 USB/calibration support, and automatic session ingestion into the next learning Loop are not provided by this workflow. The external SO-101 reader requires LeRobot and prior calibration. A matching robot configuration and simulation evaluation do not establish hardware validation.
+Physical policy execution, direct SO-101 USB/calibration support, and automatic session ingestion into the next learning Loop are not provided by this workflow. A matching robot configuration and simulation evaluation do not establish hardware validation.
 
 For bridge setup and implementation details, see the [desktop guide](https://github.com/humaan-ai/humaan/blob/v0.0.1-alpha.2/apps/desktop/README.md#deployments-read-only-live-link).
