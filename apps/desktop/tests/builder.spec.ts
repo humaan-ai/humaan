@@ -151,6 +151,7 @@ test('folder imports preserve all files and select one of multiple URDFs', async
 });
 
 test('assemble, configure, reuse, and reopen immutable versions', async ({ page }) => {
+  test.slow(); // Full workflow with multiple 3D previews and persisted versions.
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
   await openBuilder(page);
   await page.locator('summary').filter({ hasText: 'Add to assembly' }).click();
@@ -319,6 +320,7 @@ test('assemble, configure, reuse, and reopen immutable versions', async ({ page 
 });
 
 test('project URDF selection preserves drafts and isolates versions across reloads', async ({ page }) => {
+  test.slow(); // Repeated robot switches, previews, and page reloads.
   await page.addInitScript(() => {
     if (localStorage.getItem('test-project-robots')) return;
     localStorage.setItem('test-project-robots', JSON.stringify({
@@ -428,6 +430,7 @@ test('imports and saves a mimic gripper with only independent preview controls',
 });
 
 test('exploded inspection keeps saved assembly unchanged', async ({ page }) => {
+  test.slow(); // Multiple rendered drag interactions and viewport modes.
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
   await openBuilder(page);
   const xml = '<robot name="Explode fixture"><link name="base"><visual><geometry><box size="0.2 0.2 0.1"/></geometry></visual></link><link name="arm"><visual><origin xyz="0 0 0.15"/><geometry><box size="0.08 0.08 0.3"/></geometry></visual></link><joint name="shoulder" type="fixed"><parent link="base"/><child link="arm"/><origin xyz="0 0 0.1"/></joint><link name="tip"/><joint name="tool_mount" type="fixed"><parent link="arm"/><child link="tip"/><origin xyz="0 0 0.3"/></joint></robot>';
