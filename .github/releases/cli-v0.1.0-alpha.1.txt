@@ -1,0 +1,44 @@
+Humaan CLI 0.1.0-alpha.1
+
+An early alpha of Humaan's local, offline command-line tools for managing robot experiences. No cloud account or local server is required. This release establishes the CLI baseline in humaan-ai/humaan; Studio is distributed separately.
+
+Available workflows
+- Initialize a named project in the current directory with `humaan project init <name>` and inspect its identity with `humaan project show`.
+- Import Humaan v1 recordings or complete local LeRobot v3.0 datasets with `humaan import <path>`. Format detection is automatic; each LeRobot episode becomes an experience.
+- Browse experiences with `humaan list` and inspect artifacts and episode provenance with `humaan inspect <id>`.
+- Check artifact sizes and SHA-256 checksums. `humaan verify` reports all damaged entries without changing recordings and exits nonzero when verification fails.
+- Export original recording artifacts and their manifest with `humaan export <id> <destination>`.
+- Use `--json` for machine-readable output and `--store <path>` to select a recording store explicitly.
+- See activity indicators and elapsed time during interactive recording operations. Indicators are disabled for JSON output and redirected stderr.
+
+Downloads
+- macOS Apple Silicon: `humaan-cli_0.1.0-alpha.1_macos_arm64.tar.gz`.
+- Linux x86-64: `humaan-cli_0.1.0-alpha.1_linux_x86_64.tar.gz`.
+- Windows x86-64: `humaan-cli_0.1.0-alpha.1_windows_x86_64.zip`.
+
+Use the archive and accompanying SHA-256 manifest for your platform. Extract the archive and add the directory containing `humaan` (or `humaan.exe`) to your PATH. Confirm installation with `humaan --version` and `humaan --help`. Windows executables are unsigned. Linux packages are built on Ubuntu 22.04; compatibility depends on the host runtime.
+
+Quick start
+Run these commands in the directory you want to use as your project. Replace the recording path and experience ID with your own values:
+
+```sh
+humaan project init my-robot
+humaan project show
+humaan import /path/to/recording
+humaan list
+humaan inspect EXPERIENCE_ID --json
+humaan verify
+humaan export EXPERIENCE_ID ./exported-recording
+```
+
+Compatibility and limitations
+- Projects and Humaan recordings use version 1 formats. Interfaces and formats may change during alpha; back up project directories before upgrading.
+- LeRobot import supports complete v3.0 datasets only. Partial downloads, episode subsets, and other LeRobot versions are not supported.
+- Import validates dataset structure and referenced files, but does not validate video decoding, sensor alignment, physical units, or training suitability.
+- Imported shared chunks are immutable. Editing one can affect multiple experiences; checksum verification detects changes. Duplicate imports and exports to existing destinations are rejected.
+- Export preserves referenced chunks and episode provenance. It does not trim shared videos or produce a standalone LeRobot training dataset.
+- Batch import publication is not crash-atomic across all episodes. Avoid interrupting publication or modifying the store concurrently.
+- Live hardware capture, cloud storage, simulation, training, and dataset-preparation commands are not exposed by this CLI.
+
+Documentation: https://github.com/humaan-ai/humaan/blob/cli-v0.1.0-alpha.1/apps/cli/README.md
+Report issues: https://github.com/humaan-ai/humaan/issues
